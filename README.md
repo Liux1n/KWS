@@ -1,10 +1,10 @@
-# On-device Domain Adaptation for Noise-Robust Keyword Spotting
+# Extreme-Edge Experience Replay for Keyword Spotting
 
 ## Introduction
 
-On-device Domain Adaptation (ODDA) for Noise-Robust Keyword Spotting is a methodology aimed at increasing the robustness to unseen noises for a keyword spotting system. The objective of keyword spotting (KWS) is to detect a set of predefined keywords within a stream of user utterances. The difficulty of the task increases in real environments with significant noise. To improve the performance of a KWS system in noise conditions unseen during training, we propose a methodology for tailoring a model to on-site noises through ODDA.
+<!-- On-device Domain Adaptation (ODDA) for Noise-Robust Keyword Spotting is a methodology aimed at increasing the robustness to unseen noises for a keyword spotting system. The objective of keyword spotting (KWS) is to detect a set of predefined keywords within a stream of user utterances. The difficulty of the task increases in real environments with significant noise. To improve the performance of a KWS system in noise conditions unseen during training, we propose a methodology for tailoring a model to on-site noises through ODDA. -->
 
-If you use our methodology in an academic context, please cite the following publication:
+<!-- If you use our methodology in an academic context, please cite the following publication:
 
 Paper: [Towards On-device Domain Adaptation for Noise-Robust Keyword Spotting](https://ieeexplore.ieee.org/document/9869990)
 
@@ -19,7 +19,7 @@ Paper: [Towards On-device Domain Adaptation for Noise-Robust Keyword Spotting](h
   pages={82-85},
   doi={10.1109/AICAS54282.2022.9869990}}
 
-```
+``` -->
 
 ## Project structure 
 

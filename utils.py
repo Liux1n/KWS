@@ -25,6 +25,7 @@ import numpy as np
 import seaborn as sn
 import pandas as pd
 import matplotlib.pyplot as plt
+import yaml
 
 
 def npy_to_txt(layer_number, activations):
@@ -96,7 +97,7 @@ def per_noise_accuracy(labels, predicted, noises):
 
 def parameter_generation():
     # Data processing parameters
-
+    
     data_processing_parameters = {
     'feature_bin_count':10
     }
@@ -123,8 +124,10 @@ def parameter_generation():
     # Training parameters
     training_parameters = {
     'noise_mode':'odda', # nlkws, nakws, odda
-    'noise_dataset':'demand',
-    'data_dir':'path/to/GSC/dataset',
+    # 'noise_dataset':'demand',
+    'noise_dataset':'GSC',
+    # 'data_dir':'path/to/GSC/dataset',
+    'data_dir':'G:\SemesterProject\GSC\dataset',
     'data_url':'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz',
     'epochs':60,
     'batch_size':128,
@@ -147,7 +150,7 @@ def parameter_generation():
                                       'PRESTO', 'PSTATION', 'SCAFE', 'SPSQUARE', 'STRAFFIC', \
                                       'TBUS', 'TCAR']
     else:
-        training_parameters['noise_dir'] = 'path/to/GSC/dataset/_background_noise_'
+        training_parameters['noise_dir'] = 'G:\SemesterProject\GSC\dataset\_background_noise_'
 
     target_words='yes,no,up,down,left,right,on,off,stop,go,'  # GSCv2 - 12 words
     # Selecting 35 words

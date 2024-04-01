@@ -109,7 +109,8 @@ class AudioProcessor(object):
 
     for wav_path in glob.glob(search_path):
       _ , word = os.path.split(os.path.dirname(wav_path))
-      speaker_id = wav_path.split('/')[8].split('_')[0]  # Hardcoded, should use regex.
+      # speaker_id = wav_path.split('/')[8].split('_')[0]  # Hardcoded, should use regex.
+      speaker_id = wav_path.split('\\')[4].split('_')[0]  # Hardcoded, should use regex.
       word = word.lower()
 
       # Ignore background noise, as it has been handled by generate_background_noise()
@@ -194,7 +195,8 @@ class AudioProcessor(object):
       wav_file = torch.Tensor(np.array([sf_loader]))
 
       wav_path = str(wav_path)
-      noise_type = wav_path.split('/')[6] #  TODO: index should be adapted based on the path
+      # noise_type = wav_path.split('/')[6] #  TODO: index should be adapted based on the path
+      noise_type = wav_path.split('\\')[4]
 
       if (training_parameters['noise_dataset'] == 'demand'):
         # Last 2 channels of test noises are used for testing

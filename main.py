@@ -57,7 +57,7 @@ model = DSCNNS(use_bias = True)
 model.to(device)
 summary(model,(1,49,data_processing_parameters['feature_bin_count']))
 dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
-count_ops(model, dummy_input)
+# count_ops(model, dummy_input)
 
 # Training initialization
 training_environment = Train(audio_processor, training_parameters, model, device)
