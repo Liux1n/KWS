@@ -94,10 +94,15 @@ def per_noise_accuracy(labels, predicted, noises):
                     correct = correct + 1
         print('Noise number %3d - accuracy: %.3f' % (noise,  100 * correct / total))   
 
+def load_config(config_path):
+    with open(config_path, "r") as file:
+        return yaml.safe_load(file)
 
-def parameter_generation():
+
+
+def parameter_generation(args=None,config=None):
     # Data processing parameters
-    
+
     data_processing_parameters = {
     'feature_bin_count':10
     }
@@ -123,24 +128,23 @@ def parameter_generation():
 
     # Training parameters
     training_parameters = {
-    'noise_mode':'odda', # nlkws, nakws, odda
-    # 'noise_dataset':'demand',
-    'noise_dataset':'GSC',
-    # 'data_dir':'path/to/GSC/dataset',
-    'data_dir':'G:\SemesterProject\GSC\dataset',
-    'data_url':'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz',
-    'epochs':60,
-    'batch_size':128,
-    'silence_percentage':10.0,
-    'unknown_percentage':10.0,
-    'validation_percentage':10.0,
-    'testing_percentage':10.0,
-    'background_frequency':1,
-    'background_volume':5,
+    'noise_mode':args.noise_mode, # nlkws, nakws, odda
+    'noise_dataset':'demand',
+    'data_dir':config['data_dir'],
+    'data_url':config['data_url'],
+    'epochs':config['epochs'],
+    'batch_size':config['batch_size'],
+    'silence_percentage':config['silence_percentage'],
+    'unknown_percentage':config['unknown_percentage'],
+    'validation_percentage':config['validation_percentage'],
+    'testing_percentage':config['testing_percentage'],
+    'background_frequency':config['background_frequency'],
+    'background_volume':config['background_volume'],
+    'debug':args.debug,
     }
 
     if training_parameters['noise_dataset'] == 'demand':
-        training_parameters['noise_dir'] = 'path/to/DEMAND/dataset'
+        training_parameters['noise_dir'] = config['noise_dir']
         training_parameters['noise_test'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', \
                                       'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE', 'PCAFETER', \
                                       'PRESTO', 'PSTATION', 'SCAFE', 'SPSQUARE', 'STRAFFIC', \

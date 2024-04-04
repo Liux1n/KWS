@@ -134,6 +134,9 @@ class Train():
             print("Epoch: " + str(epoch+1) +"/" + str(self.training_parameters['epochs']))
 
             data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task = None)
+            print("Data length: " + str(len(data)))
+            # take only 10 minibatches
+            # data = data[:10]
             model.train()
             self.scheduler.step()
 
@@ -141,7 +144,10 @@ class Train():
             total = 0
             correct = 0   
 
-            for minibatch in range(len(data)):
+            num_iter = 20 if self.training_parameters['debug'] else len(data)
+
+            for minibatch in range(num_iter): 
+            
 
                 inputs, labels, noises = data[0]
                 inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)

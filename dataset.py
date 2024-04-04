@@ -91,6 +91,7 @@ class AudioProcessor(object):
 
 
   def generate_data_dictionary(self, training_parameters):
+
     # For each data set, generate a dictionary containing the path to each file, its label, and its speaker.
     # Make sure the shuffling and picking of unknowns is deterministic.
     random.seed(RANDOM_SEED)
@@ -214,6 +215,7 @@ class AudioProcessor(object):
         self.background_noise_test.append(wav_file[0])
         self.background_noise_name.append(noise_type)
         self.background_noise_test_name.append(noise_type)
+    # print('Loaded background noises:', len(self.background_noise_test))
 
     if not self.background_noise:
       raise Exception('No background wav files were found in ' + search_path)
@@ -288,17 +290,18 @@ class AudioProcessor(object):
             # Selecting the noises for training, where task=None assumes diverse noise-utterance pairs
             # whereas a non-None task implies the augmentation of all utterances with the same noise
             if (task is None):
-              # background_index = np.random.randint(len(self.background_noise)) # Random augmentation
               background_index = i % len(self.background_noise) # Ordered augmentation
             else:
               background_index = np.random.randint(14*task, 14*(task+1))  
             background_samples = self.background_noise[background_index].numpy()
 
           else:
+            
             # Selecting the noises for validation/testing
             if task is None:
               # background_index = np.random.randint(len(self.background_noise_test)) # Random augmentation
               background_index = i % len(self.background_noise_test) # Ordered augmentation  
+
             else:
               background_index = task
             background_samples = self.background_noise_test[background_index].numpy() 
@@ -394,6 +397,7 @@ class AudioProcessor(object):
 
           # Assumption: the test noise list contains all noises 
           # TODO: Search in the complete noise list
+
           if (mode == 'training'):
             noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_name[background_index])
           else:
