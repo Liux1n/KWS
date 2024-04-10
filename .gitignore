@@ -24,5 +24,7 @@ build/
 
 # Datasets
 
-# Exported Models
+# wandb
+wandb/
+
 

@@ -103,6 +103,8 @@ def load_config(config_path):
 def parameter_generation(args=None,config=None):
     # Data processing parameters
 
+    config = load_config("config.yaml")
+
     data_processing_parameters = {
     'feature_bin_count':10
     }
@@ -129,7 +131,7 @@ def parameter_generation(args=None,config=None):
     # Training parameters
     training_parameters = {
     'noise_mode':args.noise_mode, # nlkws, nakws, odda
-    'noise_dataset':'demand',
+    'noise_dataset':config['noise_dataset'],
     'data_dir':config['data_dir'],
     'data_url':config['data_url'],
     'epochs':config['epochs'],
@@ -149,16 +151,16 @@ def parameter_generation(args=None,config=None):
                                       'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE', 'PCAFETER', \
                                       'PRESTO', 'PSTATION', 'SCAFE', 'SPSQUARE', 'STRAFFIC', \
                                       'TBUS', 'TCAR', 'TMETRO']
-        training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'NPARK', \
+        training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', \
                                       'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE', 'PCAFETER', \
                                       'PRESTO', 'PSTATION', 'SCAFE', 'SPSQUARE', 'STRAFFIC', \
-                                      'TBUS', 'TCAR']
+                                      'TBUS', 'TCAR', 'TMETRO']
     else:
-        training_parameters['noise_dir'] = 'G:\SemesterProject\GSC\dataset\_background_noise_'
+        training_parameters['noise_dir'] = config['data_dir']+'/_background_noise_'
 
-    target_words='yes,no,up,down,left,right,on,off,stop,go,'  # GSCv2 - 12 words
+    # target_words='yes,no,up,down,left,right,on,off,stop,go,'  # GSCv2 - 12 words
     # Selecting 35 words
-    # target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
+    target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
     wanted_words=(target_words).split(',')
     wanted_words.pop()
     training_parameters['wanted_words'] = wanted_words

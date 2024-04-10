@@ -1,9 +1,12 @@
 # data
-data_dir: 'G:\SemesterProject\GSC\dataset' # win
+# data_dir: 'G:\SemesterProject\GSC\dataset' # win
+data_dir: '/usr/scratch/sassauna2/sem24f39/GSC/dataset' # linux
 data_url: 'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz'
-noise_dir: 'G:\SemesterProject\DEMAND\dataset' # win
+# noise_dir: 'G:\SemesterProject\DEMAND\dataset' # win
+noise_dir: '/usr/scratch/sassauna2/sem24f39/DEMAND/dataset_48k' # linux
+noise_dataset: 'demand'
 # hyperparameters
-epochs: 1
+epochs: 60
 batch_size: 128
 silence_percentage: 10.0
 unknown_percentage: 10.0
@@ -11,3 +14,5 @@ validation_percentage: 10.0
 testing_percentage: 10.0
 background_frequency: 1
 background_volume: 5
+#
+project_name: 'KWS'

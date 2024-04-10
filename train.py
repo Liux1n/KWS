@@ -19,6 +19,7 @@
 
 import dataset
 import torch
+import wandb
 
 from utils import confusion_matrix, npy_to_txt, per_noise_accuracy
 
@@ -115,6 +116,7 @@ class Train():
 
                     if minibatch % 20 == 0: 
                         print('[%3d / %3d] accuracy: %.3f' % (minibatch + 1, len(data),  100 * correct / total))
+                 
                         running_loss = 0.0
 
                     if statistics == True:
@@ -172,6 +174,7 @@ class Train():
                 # Print information every 20 minibatches
                 if minibatch % 20 == 0: 
                     print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, len(data), running_loss / 10, 100 * correct / total))
+                    wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                     running_loss = 0.0
 
             tmp_acc = self.validate(model, 'validation')

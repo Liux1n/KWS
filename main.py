@@ -23,11 +23,13 @@ import os
 import time
 import math
 import random
+import wandb
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from torchsummary import summary
-from model import DSCNNS, DSCNNM, DSCNNL
+# from model import DSCNNS, DSCNNM, DSCNNL
+from dscnn import DSCNNS, DSCNNM, DSCNNL
 from utils import remove_txt, parameter_generation, load_config
 from copy import deepcopy
 from pthflops import count_ops
@@ -42,6 +44,8 @@ else:
 print (torch.version.__version__)
 print(device)
 
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--training_mode', choices=['base', 'joint', 'dil', 'cil'], default='add',
@@ -53,6 +57,8 @@ parser.add_argument('--debug', action='store_true', help="Enable debug mode.")
 args = parser.parse_args()
 
 config = load_config("config.yaml")
+
+wandb.init(project=config['project_name'], entity="liux1n", config=config)
 
 if args.training_mode == 'base':
    print('Base model')
@@ -69,7 +75,7 @@ test_size = audio_processor.get_size('testing')
 print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
 
 # Model generation and analysis
-model = DSCNNS(use_bias = True)
+model = DSCNNS(use_bias = True, n_classes = 37)
 model.to(device)
 summary(model,(1,49,data_processing_parameters['feature_bin_count']))
 dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -87,7 +93,7 @@ if train:
   # Train
   # start=time.clock_gettime(0)
   start=time.process_time()
-
+  
   training_environment.train(model)
   print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
 
