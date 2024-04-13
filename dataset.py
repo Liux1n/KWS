@@ -228,11 +228,23 @@ class AudioProcessor(object):
     return len(self.data_set[mode])
 
 
-  def get_data(self, mode, training_parameters, task, offset):
+  def get_data(self, mode, training_parameters, train_task, task, offset):
     # Prepare and return data (utterances and labels) for inference
 
     # Pick one of the partitions to choose samples from
-    candidates = self.data_set[mode]
+    if train_task == 'dil_task_0' or train_task == 'dil_task_1' or train_task == 'dil_task_2' or train_task == 'dil_task_3' or train_task == 'dil_joint':
+      candidates = self.data_set[mode] # TODO: modify this for CIL
+    elif train_task == 'cil_task_0':
+      pass
+    elif train_task == 'cil_task_1':
+      pass
+    elif train_task == 'cil_task_2':
+      pass
+    elif train_task == 'cil_task_3':
+      pass
+    elif train_task == 'cil_joint':
+      pass
+    
     if training_parameters['batch_size'] == -1:
       samples_number = len(candidates)
     else:
@@ -245,7 +257,8 @@ class AudioProcessor(object):
 
     # Required for noise analysis
     if (training_parameters['noise_mode'] == 'nlkws'):
-      use_background = (self.background_noise and (mode == 'training'))
+      # use_background = (self.background_noise and (mode == 'training'))
+      use_background = False
     else:
       use_background = (self.background_noise and self.background_noise_test)
 
@@ -410,7 +423,7 @@ class AudioProcessor(object):
 class AudioGenerator(torch.utils.data.Dataset):
     # Returning batches of data (MFCCs) and labels
 
-    def __init__(self, mode, audio_processor, training_parameters, task = None):
+    def __init__(self, mode, audio_processor, training_parameters, train_task, task = None):
         self.mode = mode
         self.audio_processor = audio_processor
         if self.mode != 'training' and training_parameters['noise_mode'] == 'nlkws':
@@ -422,6 +435,7 @@ class AudioGenerator(torch.utils.data.Dataset):
         # Preparing data for ODDA
         self.position = 0
         self.task = task
+        self.train_task = train_task
 
 
     def __len__(self):
@@ -436,7 +450,7 @@ class AudioGenerator(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # Return a random batch of data, unless training_parameters['batch_size'] == -1
 
-        data, labels, noises = self.audio_processor.get_data(self.mode, self.training_parameters, self.task, self.position)        
+        data, labels, noises = self.audio_processor.get_data(self.mode, self.training_parameters, self.train_task, self.task, self.position)        
 
         self.position += self.training_parameters['batch_size']
         

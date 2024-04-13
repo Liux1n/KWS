@@ -24,6 +24,9 @@ build/
 
 # Datasets
 
+#models
+models/
+buffer/
 # wandb
 wandb/
 
