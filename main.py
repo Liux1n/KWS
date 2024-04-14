@@ -42,8 +42,9 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
-print (torch.version.__version__)
-print(device)
+
+print ('Torch Version:', torch.version.__version__)
+print('Device:', device)
 config = load_config("config.yaml")
 
 parser = argparse.ArgumentParser()
@@ -53,6 +54,7 @@ parser.add_argument('--task',
                            'cil_task_0', 'cil_task_1', 'cil_task_2', 'cil_task_3', 'cil_joint'
                            ], 
                   default='dil_task_0',
+                  required=True,
                   help='training mode (default: dil_task_0)')
 
 parser.add_argument('--method', 
@@ -60,14 +62,14 @@ parser.add_argument('--method',
                            ], 
                   default='base',
                   required=True,
-                  help='training mode (default: dil_task_0)')
+                  help='training  method (default: base)')
 
 parser.add_argument('--noise_mode', choices=['nlkws', 'nakws', 'odda'], default='nakws',
                     help='noise mode')
 parser.add_argument('--debug', action='store_true', help="Enable debug mode.")
 parser.add_argument('--wandb', action='store_true', help="Enable wandb log.")
-parser.add_argument('--pretrain', action='store_true', help="Enable wandb log.")
-parser.add_argument('--background_volume', type=int, help="An integer argument.")
+parser.add_argument('--pretrain', action='store_true', help="Enable pretrain.")
+parser.add_argument('--background_volume', type=int, help="Set background volume.")
 args = parser.parse_args()
 
 
@@ -145,7 +147,6 @@ else:
   print('Task: '+args.task)
   start=time.process_time()
   # Load pretrained model 
-  
   # DIL models:
   # model_name = 'base_dil_task_0_model.pth'
   # model_name = 'base_dil_joint_model.pth'
@@ -213,7 +214,7 @@ else:
       print('ER_random')
 
       if args.task == 'dil_task_1':
-        print('starting dil_task_1')
+        print('Starting ER_random on dil_task_1')
         # initialize memory buffer
         memory_buffer = {}
         # input shape # ( 1, 49, 10])
@@ -223,6 +224,7 @@ else:
         memory_buffer = training_environment.er_random_train(model,memory_buffer, base = True)
 
       elif args.task == 'dil_task_2':
+        print('Starting ER_random on dil_task_2')
         # load memory buffer from ./buffer/dil_task_1_buffer_input
         buffer_path_input = './buffer/dil_task_1_buffer_input.npy'
         buffer_path_label = './buffer/dil_task_1_buffer_label.npy'
@@ -234,9 +236,45 @@ else:
 
         memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
       elif args.task == 'dil_task_3':
+        print('Starting ER_random on dil_task_3')
         # load memory buffer from ./buffer/dil_task_2_buffer_input
         buffer_path_input = './buffer/dil_task_2_buffer_input.npy'
         buffer_path_label = './buffer/dil_task_2_buffer_label.npy'
+        memory_buffer_inputs = np.load(buffer_path_input)
+        memory_buffer_labels = np.load(buffer_path_label)
+        memory_buffer = {}
+        memory_buffer['inputs'] = memory_buffer_inputs
+        memory_buffer['labels'] = memory_buffer_labels
+        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
+
+      # CIL tasks
+      elif args.task == 'cil_task_1':
+        print('Starting ER_random on cil_task_1')
+        # initialize memory buffer
+        memory_buffer = {}
+        # input shape # ( 1, 49, 10])
+        # label shape # (1,)
+        memory_buffer['inputs'] = []
+        memory_buffer['labels'] = []
+        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = True)
+
+      elif args.task == 'cil_task_2':
+        print('Starting ER_random on cil_task_2')
+        # load memory buffer from ./buffer/dil_task_1_buffer_input
+        buffer_path_input = './buffer/cil_task_1_buffer_input.npy'
+        buffer_path_label = './buffer/cil_task_1_buffer_label.npy'
+        memory_buffer_inputs = np.load(buffer_path_input)
+        memory_buffer_labels = np.load(buffer_path_label)
+        memory_buffer = {}
+        memory_buffer['inputs'] = memory_buffer_inputs
+        memory_buffer['labels'] = memory_buffer_labels
+
+        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
+      elif args.task == 'cil_task_3':
+        print('Starting ER_random on cil_task_3')
+        # load memory buffer from ./buffer/dil_task_2_buffer_input
+        buffer_path_input = './buffer/cil_task_2_buffer_input.npy'
+        buffer_path_label = './buffer/cil_task_2_buffer_label.npy'
         memory_buffer_inputs = np.load(buffer_path_input)
         memory_buffer_labels = np.load(buffer_path_label)
         memory_buffer = {}
