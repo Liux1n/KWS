@@ -230,21 +230,69 @@ class AudioProcessor(object):
 
   def get_data(self, mode, training_parameters, train_task, task, offset):
     # Prepare and return data (utterances and labels) for inference
-
     # Pick one of the partitions to choose samples from
-    if train_task == 'dil_task_0' or train_task == 'dil_task_1' or train_task == 'dil_task_2' or train_task == 'dil_task_3' or train_task == 'dil_joint':
-      candidates = self.data_set[mode] # TODO: modify this for CIL
-    elif train_task == 'cil_task_0':
-      pass
-    elif train_task == 'cil_task_1':
-      pass
-    elif train_task == 'cil_task_2':
-      pass
-    elif train_task == 'cil_task_3':
-      pass
-    elif train_task == 'cil_joint':
-      pass
+    candidates = self.data_set[mode] # TODO: modify this for CIL
+    # {'label': 'two', 'file': '/usr/scratch/sassauna2/sem24f39/GSC/dataset/two/caf9fceb_nohash_1.wav', 'speaker': 'caf9fceb'}
+    # target_words='yes,no,up,down,left,right,on,off,stop,go,'
+                    #2  ,3 ,4 ,5   ,6   ,7    ,8 ,9  ,10  ,11
+    # target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,
+    # follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
     
+    # self.data_set = {'validation': [], 'testing': [], 'training': []}
+
+    # 1 to 17: yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,
+    # 18 to 23: follow, forward, four, happy, house, learn
+    # 24 to 30: marvin, nine, one, seven, sheila, six
+    # 31 to 35: three, tree, two, visual, wow, zero
+
+    if mode == 'training':
+
+      if train_task == 'cil_task_0': # 1 to 17
+          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif train_task == 'cil_task_1': # 18 to 23
+          labels = set(['follow','forward','four','happy','house','learn'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif train_task == 'cil_task_2': # 24 to 29
+          labels = set(['marvin','nine','one','seven','sheila','six'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif train_task == 'cil_task_3': # 30 to 35
+          labels = set(['three','tree','two','visual','wow','zero'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif train_task == 'cil_joint': # keep all the words
+          pass
+
+
+    elif mode == 'validation' or mode == 'testing':
+        
+        if train_task == 'cil_task_0': # 1 to 17
+            labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+            candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif train_task == 'cil_task_1': # 1 to 23
+            labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+                          'follow','forward','four','happy','house','learn'])
+            candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif train_task == 'cil_task_2': # 1 to 29
+            labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+                          'follow','forward','four','happy','house','learn',
+                          'marvin','nine','one','seven','sheila','six'])
+            candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif train_task == 'cil_task_3' or train_task == 'cil_joint': # 1 to 35
+            labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+                          'follow','forward','four','happy','house','learn',
+                          'marvin','nine','one','seven','sheila','six',
+                          'three','tree','two','visual','wow','zero'])
+            candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+    # print('Candidates:', candidates)
+
     if training_parameters['batch_size'] == -1:
       samples_number = len(candidates)
     else:
@@ -258,7 +306,7 @@ class AudioProcessor(object):
     # Required for noise analysis
     if (training_parameters['noise_mode'] == 'nlkws'):
       # use_background = (self.background_noise and (mode == 'training'))
-      use_background = False
+      use_background = False # no background noise if nlkws
     else:
       use_background = (self.background_noise and self.background_noise_test)
 

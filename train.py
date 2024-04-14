@@ -54,7 +54,7 @@ class Train():
             training_parameters['batch_size'] = batch_size   
 
 
-        data = dataset.AudioGenerator(mode, self.audio_processor, training_parameters, task = task)
+        data = dataset.AudioGenerator(mode, self.audio_processor, training_parameters, self.args.task, task = task)
         model.eval()  
 
         correct = 0
@@ -156,7 +156,10 @@ class Train():
             correct = 0   
 
             num_iter = 20 if self.training_parameters['debug'] else len(data)
-
+            if self.args.task == 'cil_task_0':
+                num_iter = int((17/35)*num_iter)
+            elif self.args.task == 'cil_task_1' or self.args.task == 'cil_task_2' or self.args.task == 'cil_task_3':
+                num_iter = int((6/35)*num_iter)
             for minibatch in range(num_iter): 
             
 
@@ -180,16 +183,20 @@ class Train():
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
 
-                # Print information every 20 minibatches
-                if minibatch % 20 == 0: 
-                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, len(data), running_loss / 10, 100 * correct / total))
+                # Print information every 50 minibatches
+                if minibatch % 50 == 0: 
+                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
                     if self.args.wandb:
                         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                     running_loss = 0.0
 
             tmp_acc = self.validate(model, 'validation')
 
-        model_name = self.args.method + '_12_' + self.args.task + '_model.pth'
+        # get current time
+        import time
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+
+        model_name = self.args.method + timestr + self.args.task + '_model.pth'
         PATH = './models/' + model_name
 
         torch.save(model.state_dict(), PATH)
@@ -222,7 +229,13 @@ class Train():
                 total = 0
                 correct = 0   
 
-                num_iter = 20 if self.training_parameters['debug'] else len(data)
+                num_iter = len(data)
+                # keyword_len = len(data)*0.8
+                # sil_and_unknown_len = len(data)*0.2
+                if self.args.task == 'cil_task_0':
+                    num_iter = int((17/35)*num_iter)
+                elif self.args.task == 'cil_task_1' or self.args.task == 'cil_task_2' or self.args.task == 'cil_task_3':
+                    num_iter = int((6/35)*num_iter)
 
                 for minibatch in range(num_iter): 
 
@@ -247,8 +260,8 @@ class Train():
                     correct += (predicted == labels).sum().item()
 
                     # Print information every 20 minibatches
-                    if minibatch % 20 == 0: 
-                        print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, len(data), running_loss / 10, 100 * correct / total))
+                    if minibatch % 50 == 0: 
+                        print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
                         if self.args.wandb:
                             wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                         running_loss = 0.0
@@ -324,7 +337,11 @@ class Train():
 
             # num_iter = 20 if self.training_parameters['debug'] else len(data)
             num_iter = len(data)
-
+            if self.args.task == 'cil_task_0':
+                num_iter = int((17/35)*num_iter)
+            elif self.args.task == 'cil_task_1' or self.args.task == 'cil_task_2' or self.args.task == 'cil_task_3':
+                num_iter = int((6/35)*num_iter)
+            
             for minibatch in range(num_iter): 
 
                 inputs, labels, noises = data[0]
@@ -375,7 +392,7 @@ class Train():
 
                 # Print information every 50 minibatches
                 if minibatch % 50 == 0: 
-                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, len(data), running_loss / 10, 100 * correct / total))
+                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
                     if self.args.wandb:
                         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                     running_loss = 0.0
@@ -391,73 +408,73 @@ class Train():
 
 
 
-    def adapt (self, model, noise):
+    # def adapt (self, model, noise):
 
-        self.training_parameters['noise_test'] = noise
-        self.training_parameters['noise_train'] = noise
+    #     self.training_parameters['noise_test'] = noise
+    #     self.training_parameters['noise_train'] = noise
 
-         # Train model
-        best_acc = 0
-        best_ep  = 0
-        for epoch in range(0, self.training_parameters['epochs']):
+    #      # Train model
+    #     best_acc = 0
+    #     best_ep  = 0
+    #     for epoch in range(0, self.training_parameters['epochs']):
 
-            print("Epoch: " + str(epoch+1) +"/" + str(self.training_parameters['epochs']))
+    #         print("Epoch: " + str(epoch+1) +"/" + str(self.training_parameters['epochs']))
 
-            # task = -1      - Silent training
-            # task = None    - Mixed training
-            # task = epoch-1 - NaiveCL
-            # task = n       - Fixed-noise training
+    #         # task = -1      - Silent training
+    #         # task = None    - Mixed training
+    #         # task = epoch-1 - NaiveCL
+    #         # task = n       - Fixed-noise training
 
-            data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task = None)
-            model.train()
-            self.scheduler.step()
+    #         data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task = None)
+    #         model.train()
+    #         self.scheduler.step()
 
-            running_loss = 0.0
-            total = 0
-            correct = 0   
+    #         running_loss = 0.0
+    #         total = 0
+    #         correct = 0   
 
-            for minibatch in range(len(data)):
+    #         for minibatch in range(len(data)):
 
-                inputs, labels, noises = data[0]
-                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
-                labels = torch.Tensor(labels).to(self.device).long()
+    #             inputs, labels, noises = data[0]
+    #             inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+    #             labels = torch.Tensor(labels).to(self.device).long()
 
-                # Zero out the parameter gradients after each mini-batch
-                self.optimizer.zero_grad()
+    #             # Zero out the parameter gradients after each mini-batch
+    #             self.optimizer.zero_grad()
 
-                # Train, compute loss, update optimizer
-                model = model.to(self.device)
-                outputs = F.softmax(model(inputs), dim=1)
-                loss = self.criterion(outputs, labels)
-                loss.backward()
-                self.optimizer.step()
+    #             # Train, compute loss, update optimizer
+    #             model = model.to(self.device)
+    #             outputs = F.softmax(model(inputs), dim=1)
+    #             loss = self.criterion(outputs, labels)
+    #             loss.backward()
+    #             self.optimizer.step()
 
-                # Compute training statistics
-                running_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+    #             # Compute training statistics
+    #             running_loss += loss.item()
+    #             _, predicted = torch.max(outputs.data, 1)
+    #             total += labels.size(0)
+    #             correct += (predicted == labels).sum().item()
 
-                # Print information every 20 minibatches
-                if minibatch % 20 == 0: 
-                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, len(data), running_loss / 10, 100 * correct / total))
-                    running_loss = 0.0
+    #             # Print information every 20 minibatches
+    #             if minibatch % 20 == 0: 
+    #                 print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, len(data), running_loss / 10, 100 * correct / total))
+    #                 running_loss = 0.0
 
-            tmp_acc = self.validate(model, 'validation', task = 0)
+    #         tmp_acc = self.validate(model, 'validation', task = 0)
 
-            # Save best performing network
-            if (tmp_acc > best_acc):
-                best_acc = tmp_acc
-                best_ep  = epoch
-                BEST_PATH = './model_ep' + str(best_ep) + '_acc' + str(best_acc) + '.pth'
-                torch.save(model.state_dict(), BEST_PATH)
+    #         # Save best performing network
+    #         if (tmp_acc > best_acc):
+    #             best_acc = tmp_acc
+    #             best_ep  = epoch
+    #             BEST_PATH = './model_ep' + str(best_ep) + '_acc' + str(best_acc) + '.pth'
+    #             torch.save(model.state_dict(), BEST_PATH)
 
-            patience = 10
-            if (epoch >= best_ep + patience):
-              break
+    #         patience = 10
+    #         if (epoch >= best_ep + patience):
+    #           break
 
 
-        PATH = './model.pth'
-        torch.save(model.state_dict(), PATH)
+    #     PATH = './model.pth'
+    #     torch.save(model.state_dict(), PATH)
 
         

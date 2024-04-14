@@ -162,7 +162,7 @@ def parameter_generation(args=None,config=None):
         # CIL: 
         # Task 0: keyword 1 to 17
         # Task 1: keyword 18 to 23
-        # Task 2: keyword 19 to 29
+        # Task 2: keyword 24 to 29
         # Task 3: keyword 30 to 35
 
         if args.task == 'dil_task_0':
@@ -194,7 +194,7 @@ def parameter_generation(args=None,config=None):
 
             training_parameters['noise_train'] = ['TBUS', 'TCAR', 'TMETRO']
 
-        if args.task == 'dil_joint':
+        elif args.task == 'dil_joint':
             training_parameters['noise_test'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
                                                 'PCAFETER', 'PRESTO', 'PSTATION',\
                                                 'SCAFE', 'SPSQUARE', 'STRAFFIC',\
@@ -204,6 +204,11 @@ def parameter_generation(args=None,config=None):
                                                 'PCAFETER', 'PRESTO', 'PSTATION',\
                                                 'SCAFE', 'SPSQUARE', 'STRAFFIC',\
                                                 'TBUS', 'TCAR', 'TMETRO']
+        else:
+            # not used.
+            training_parameters['noise_test'] = ['DKITCHEN']
+
+            training_parameters['noise_train'] = ['DKITCHEN']
             
             
 
@@ -214,14 +219,8 @@ def parameter_generation(args=None,config=None):
                  #2  ,3 ,4 ,5   ,6   ,7    ,8 ,9  ,10  ,11
     # Selecting 35 words
     
-    if args.task == 'dil_task_0' or args.task == 'dil_task_1' or \
-       args.task == 'dil_task_2' or args.task == 'dil_task_3' or args.task == 'dil_joint':
-        target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
-    elif args.task == 'cil_task_0':
-        target_words='yes,no,up,down,left,\
-                      right,on,off,stop,go,\
-                      backward,bed,bird,cat,dog,\
-                      eight,five,'  # GSCv2 - 17 words
+    target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
+
 
     wanted_words=(target_words).split(',')
     wanted_words.pop()

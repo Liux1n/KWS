@@ -8,7 +8,7 @@ noise_dataset: 'demand'
 # hyperparameters
 epochs: 60
 epochs_CL: 16
-n_classes: 37
+n_classes: 35
 # n_classes: 12
 batch_size: 128
 silence_percentage: 10.0

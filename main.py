@@ -44,8 +44,7 @@ else:
     device = torch.device('cpu')
 print (torch.version.__version__)
 print(device)
-
-
+config = load_config("config.yaml")
 
 parser = argparse.ArgumentParser()
 
@@ -68,10 +67,10 @@ parser.add_argument('--noise_mode', choices=['nlkws', 'nakws', 'odda'], default=
 parser.add_argument('--debug', action='store_true', help="Enable debug mode.")
 parser.add_argument('--wandb', action='store_true', help="Enable wandb log.")
 parser.add_argument('--pretrain', action='store_true', help="Enable wandb log.")
-
+parser.add_argument('--background_volume', type=int, help="An integer argument.")
 args = parser.parse_args()
 
-config = load_config("config.yaml")
+
 if args.wandb:
   wandb.init(
             project=config['project_name'], 
@@ -101,10 +100,26 @@ print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size)
 # Model generation and analysis
 if args.task == 'dil_task_0' or args.task == 'dil_task_1' or \
    args.task == 'dil_task_2' or args.task == 'dil_task_3' or args.task == 'dil_joint':
-  n_classes = config['n_classes'] 
-  model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
-  # model = DSCNNS(use_bias = True, n_classes = n_classes) # 10 words
+  n_classes = config['n_classes'] + 2 # 35 words + 1 unknown + 1 silence
 
+elif args.task == 'cil_task_0': # 1 to 17
+  n_classes = 17 + 2 # 17 words + 1 unknown + 1 silence
+  # n_classes = 35 + 2 
+
+elif args.task == 'cil_task_1': # 1 to 23
+  n_classes = 23 + 2 # 6 words + 1 unknown + 1 silence
+  # n_classes = 35 + 2 
+
+elif args.task == 'cil_task_2': # 1 to 29
+  n_classes = 29 + 2 # 6 words + 1 unknown + 1 silence
+  # n_classes = 35 + 2 
+
+elif args.task == 'cil_task_3' or args.task == 'cil_joint': # 1 to 35
+  n_classes = 35 + 2 # 6 words + 1 unknown + 1 silence
+  # n_classes = 35 + 2 
+
+
+model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
 model.to(device)
 summary(model,(1,49,data_processing_parameters['feature_bin_count']))
 dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -130,13 +145,58 @@ else:
   print('Task: '+args.task)
   start=time.process_time()
   # Load pretrained model 
-  model_name = 'base_dil_task_0_model.pth'
-  # model_name = 'base_12_dil_task_0_model.pth'
-  # model_name = 'finetune_dil_task_1_model.pth'
+  
+  # DIL models:
+  # model_name = 'base_dil_task_0_model.pth'
   # model_name = 'base_dil_joint_model.pth'
+  # model_name = 'base_12_dil_task_0_model.pth'
+  # fine-tune models:
+  # model_name = 'finetune_dil_task_1_model.pth'
+  # random ER models:
+  # model_name = 'ER_random_dil_task_1_model.pth'
+  # model_name = 'ER_random_dil_task_2_model.pth'
+  
+  # CIL models:
+  model_name = 'base_12_cil_task_0_model.pth'
+  
+  
   model_path = './models/' + model_name 
+  # Load the state dict
 
-  model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+  if args.task == 'dil_task_0' or args.task == 'dil_task_1' or args.task == 'dil_task_2' \
+  or args.task == 'dil_task_3' or args.task == 'dil_joint' or args.task == 'cil_task_0':
+    
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+  else:
+    # cil_task_0: n_classes = 19
+    # cil_task_1: n_classes = 25
+    # cil_task_2: n_classes = 31
+    # cil_task_3: n_classes = 37
+    # Load the state dict
+    state_dict = torch.load(model_path, map_location=torch.device('cuda'))
+
+    # Get the weights and biases of the old layer
+    old_weights = state_dict['fc1.weight']
+    old_bias = state_dict['fc1.bias']
+
+    # Create new weights and biases with the desired size
+    new_weights = torch.randn([n_classes, 64])
+    new_bias = torch.randn([n_classes])
+
+    n_classes_prev = 19
+    # Copy the old weights and biases into the new ones
+    new_weights[:n_classes_prev] = old_weights
+    new_bias[:n_classes_prev] = old_bias
+
+    # Replace the weights and biases in the state dict
+    state_dict['fc1.weight'] = new_weights
+    state_dict['fc1.bias'] = new_bias
+
+    # Load the modified state dict into the model
+    model.load_state_dict(state_dict)
+    # model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+
+    
   print('Load model from: ' + model_path)
 
   if args.method == 'source_only':
@@ -172,7 +232,7 @@ else:
         memory_buffer['inputs'] = memory_buffer_inputs
         memory_buffer['labels'] = memory_buffer_labels
 
-        memory_buffer = training_environment.er_random_train(model, base = False)
+        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
       elif args.task == 'dil_task_3':
         # load memory buffer from ./buffer/dil_task_2_buffer_input
         buffer_path_input = './buffer/dil_task_2_buffer_input.npy'
@@ -182,7 +242,7 @@ else:
         memory_buffer = {}
         memory_buffer['inputs'] = memory_buffer_inputs
         memory_buffer['labels'] = memory_buffer_labels
-        memory_buffer = training_environment.er_random_train(model, base = False)
+        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
 
       memory_buffer_inputs = memory_buffer['inputs']
       memory_buffer_labels = memory_buffer['labels']
