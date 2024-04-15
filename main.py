@@ -99,26 +99,29 @@ valid_size = audio_processor.get_size('validation')
 test_size = audio_processor.get_size('testing')
 print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
 
-# Model generation and analysis
-if args.task == 'dil_task_0' or args.task == 'dil_task_1' or \
-   args.task == 'dil_task_2' or args.task == 'dil_task_3' or args.task == 'dil_joint':
-  n_classes = config['n_classes'] + 2 # 35 words + 1 unknown + 1 silence
+# # Model generation and analysis
+# if args.task == 'dil_task_0' or args.task == 'dil_task_1' or \
+#    args.task == 'dil_task_2' or args.task == 'dil_task_3' or args.task == 'dil_joint':
+#   n_classes = config['n_classes'] + 2 # 35 words + 1 unknown + 1 silence
 
-elif args.task == 'cil_task_0': # 1 to 17
+if args.task == 'cil_task_0' and args.method != 'joint': # 1 to 17
   n_classes = 17 + 2 # 17 words + 1 unknown + 1 silence
   # n_classes = 35 + 2 
 
-elif args.task == 'cil_task_1': # 1 to 23
+elif args.task == 'cil_task_1' and args.method != 'joint': # 1 to 23
   n_classes = 23 + 2 # 6 words + 1 unknown + 1 silence
   # n_classes = 35 + 2 
 
-elif args.task == 'cil_task_2': # 1 to 29
+elif args.task == 'cil_task_2' and args.method != 'joint': # 1 to 29
   n_classes = 29 + 2 # 6 words + 1 unknown + 1 silence
   # n_classes = 35 + 2 
 
-elif args.task == 'cil_task_3' or args.task == 'cil_joint': # 1 to 35
+elif (args.task == 'cil_task_3' or args.task == 'cil_joint') and args.method != 'joint': # 1 to 35
   n_classes = 35 + 2 # 6 words + 1 unknown + 1 silence
-  # n_classes = 35 + 2 
+  # n_classes = 35 + 2
+else: 
+  n_classes = config['n_classes'] + 2 # 35 words + 1 unknown + 1 silence
+
 
 
 model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
@@ -156,46 +159,63 @@ else:
   # random ER models:
   # model_name = 'ER_random_dil_task_1_model.pth'
   # model_name = 'ER_random_dil_task_2_model.pth'
+
+  # DIL vol=9 models:
+  # model_name = 'base20240414-231812dil_task_0_model.pth'
   
   # CIL models:
-  model_name = 'base_12_cil_task_0_model.pth'
-  
+  # model_name = 'base_cil_task_0_model.pth'
+  # model_name = 'ER_random_cil_task_1_model.pth'
+  # model_name = 'ER_random_cil_task_2_model.pth'
+  model_name = 'joint_12_cil_joint_model.pth'
   
   model_path = './models/' + model_name 
   # Load the state dict
 
   if args.task == 'dil_task_0' or args.task == 'dil_task_1' or args.task == 'dil_task_2' \
-  or args.task == 'dil_task_3' or args.task == 'dil_joint' or args.task == 'cil_task_0':
+  or args.task == 'dil_task_3' or args.task == 'dil_joint' or args.task == 'cil_task_0' \
+  or args.task == 'cil_joint':
     
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
   else:
-    # cil_task_0: n_classes = 19
-    # cil_task_1: n_classes = 25
-    # cil_task_2: n_classes = 31
-    # cil_task_3: n_classes = 37
-    # Load the state dict
-    state_dict = torch.load(model_path, map_location=torch.device('cuda'))
+    if args.method == 'joint':
+      model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+    else:
 
-    # Get the weights and biases of the old layer
-    old_weights = state_dict['fc1.weight']
-    old_bias = state_dict['fc1.bias']
+      # cil_task_0: n_classes = 19
+      # cil_task_1: n_classes = 25
+      # cil_task_2: n_classes = 31 
+      # cil_task_3: n_classes = 37
+      # Load the state dict
+      state_dict = torch.load(model_path, map_location=torch.device('cuda'))
 
-    # Create new weights and biases with the desired size
-    new_weights = torch.randn([n_classes, 64])
-    new_bias = torch.randn([n_classes])
+      # Get the weights and biases of the old layer
+      old_weights = state_dict['fc1.weight']
+      old_bias = state_dict['fc1.bias']
 
-    n_classes_prev = 19
-    # Copy the old weights and biases into the new ones
-    new_weights[:n_classes_prev] = old_weights
-    new_bias[:n_classes_prev] = old_bias
+      # Create new weights and biases with the desired size
+      new_weights = torch.randn([n_classes, 64])
+      new_bias = torch.randn([n_classes])
+      if args.method == 'source_only' or args.method == 'base' or args.method == 'finetune':
+        n_classes_prev = 19
+      elif args.method == 'ER_random':
+        if args.task == 'cil_task_1':
+          n_classes_prev = 19
+        elif args.task == 'cil_task_2':
+          n_classes_prev = 25
+        elif args.task == 'cil_task_3':
+          n_classes_prev = 31
+      # Copy the old weights and biases into the new ones
+      new_weights[:n_classes_prev] = old_weights
+      new_bias[:n_classes_prev] = old_bias
 
-    # Replace the weights and biases in the state dict
-    state_dict['fc1.weight'] = new_weights
-    state_dict['fc1.bias'] = new_bias
+      # Replace the weights and biases in the state dict
+      state_dict['fc1.weight'] = new_weights
+      state_dict['fc1.bias'] = new_bias
 
-    # Load the modified state dict into the model
-    model.load_state_dict(state_dict)
-    # model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+      # Load the modified state dict into the model
+      model.load_state_dict(state_dict)
+      # model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
 
     
   print('Load model from: ' + model_path)

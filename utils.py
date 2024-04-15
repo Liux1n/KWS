@@ -217,8 +217,6 @@ def parameter_generation(args=None,config=None):
 
     # target_words='yes,no,up,down,left,right,on,off,stop,go,'  # GSCv2 - 10 words
                  #2  ,3 ,4 ,5   ,6   ,7    ,8 ,9  ,10  ,11
-    # Selecting 35 words
-    
     target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
 
 
