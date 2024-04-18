@@ -184,7 +184,7 @@ class AudioProcessor(object):
     self.background_noise_test = []
     self.background_noise_test_name = []
 
-    print (training_parameters)
+    # print (training_parameters)
 
     background_dir = os.path.join(training_parameters['noise_dir'])
     if not os.path.exists(background_dir):
@@ -228,7 +228,7 @@ class AudioProcessor(object):
     return len(self.data_set[mode])
 
 
-  def get_data(self, mode, training_parameters, train_task, task, offset):
+  def get_data(self, mode, training_parameters, task_id, task, offset):
     # Prepare and return data (utterances and labels) for inference
     # Pick one of the partitions to choose samples from
     candidates = self.data_set[mode] # TODO: modify this for CIL
@@ -247,44 +247,44 @@ class AudioProcessor(object):
 
     if mode == 'training':
 
-      if train_task == 'cil_task_0': # 1 to 17
+      if task_id == 'cil_task_0': # 1 to 17
           labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif train_task == 'cil_task_1': # 18 to 23
+      elif task_id == 'cil_task_1': # 18 to 23
           labels = set(['follow','forward','four','happy','house','learn'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif train_task == 'cil_task_2': # 24 to 29
+      elif task_id == 'cil_task_2': # 24 to 29
           labels = set(['marvin','nine','one','seven','sheila','six'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif train_task == 'cil_task_3': # 30 to 35
+      elif task_id == 'cil_task_3': # 30 to 35
           labels = set(['three','tree','two','visual','wow','zero'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif train_task == 'cil_joint': # keep all the words
+      elif task_id == 'cil_joint': # keep all the words
           pass
 
 
     elif mode == 'validation' or mode == 'testing':
         
-        if train_task == 'cil_task_0': # 1 to 17
+        if task_id == 'cil_task_0': # 1 to 17
             labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
             candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-        elif train_task == 'cil_task_1': # 1 to 23
+        elif task_id == 'cil_task_1': # 1 to 23
             labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
                           'follow','forward','four','happy','house','learn'])
             candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-        elif train_task == 'cil_task_2': # 1 to 29
+        elif task_id == 'cil_task_2': # 1 to 29
             labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
                           'follow','forward','four','happy','house','learn',
                           'marvin','nine','one','seven','sheila','six'])
             candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-        elif train_task == 'cil_task_3' or train_task == 'cil_joint': # 1 to 35
+        elif task_id == 'cil_task_3' or task_id == 'cil_joint': # 1 to 35
             labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
                           'follow','forward','four','happy','house','learn',
                           'marvin','nine','one','seven','sheila','six',
@@ -471,7 +471,7 @@ class AudioProcessor(object):
 class AudioGenerator(torch.utils.data.Dataset):
     # Returning batches of data (MFCCs) and labels
 
-    def __init__(self, mode, audio_processor, training_parameters, train_task, task = None):
+    def __init__(self, mode, audio_processor, training_parameters, task_id, task = None):
         self.mode = mode
         self.audio_processor = audio_processor
         if self.mode != 'training' and training_parameters['noise_mode'] == 'nlkws':
@@ -483,7 +483,7 @@ class AudioGenerator(torch.utils.data.Dataset):
         # Preparing data for ODDA
         self.position = 0
         self.task = task
-        self.train_task = train_task
+        self.task_id = task_id
 
 
     def __len__(self):
@@ -498,7 +498,7 @@ class AudioGenerator(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # Return a random batch of data, unless training_parameters['batch_size'] == -1
 
-        data, labels, noises = self.audio_processor.get_data(self.mode, self.training_parameters, self.train_task, self.task, self.position)        
+        data, labels, noises = self.audio_processor.get_data(self.mode, self.training_parameters, self.task_id, self.task, self.position)        
 
         self.position += self.training_parameters['batch_size']
         

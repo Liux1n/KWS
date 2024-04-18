@@ -16,7 +16,7 @@
 #
 # Author: Cristian Cioflan, ETH (cioflanc@iis.ee.ethz.ch)
 
-
+import copy
 import torch
 import dataset
 import os
@@ -31,7 +31,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from torchsummary import summary
 # from model import DSCNNS, DSCNNM, DSCNNL
 from dscnn import DSCNNS, DSCNNM, DSCNNL
-from utils import remove_txt, parameter_generation, load_config
+from utils import remove_txt, parameter_generation, load_config, Buffer_NRS
 from copy import deepcopy
 from pthflops import count_ops
 from train import Train
@@ -49,16 +49,14 @@ config = load_config("config.yaml")
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--task', 
-                  choices=['dil_task_0', 'dil_task_1' , 'dil_task_2', 'dil_task_3' , 'dil_joint',
-                           'cil_task_0', 'cil_task_1', 'cil_task_2', 'cil_task_3', 'cil_joint'
-                           ], 
-                  default='dil_task_0',
+parser.add_argument('--mode', 
+                  choices=['cil', 'dil'], 
+                  default='cil',
                   required=True,
-                  help='training mode (default: dil_task_0)')
+                  help='training mode (default: cil)')
 
 parser.add_argument('--method', 
-                  choices=['base','source_only', 'finetune', 'joint', 'ER_random', 'ECBRS', 'custum'
+                  choices=['base','source_only', 'finetune', 'joint', 'ER_NRS', 'ECBRS', 'custum','pretrain'
                            ], 
                   default='base',
                   required=True,
@@ -70,6 +68,7 @@ parser.add_argument('--debug', action='store_true', help="Enable debug mode.")
 parser.add_argument('--wandb', action='store_true', help="Enable wandb log.")
 parser.add_argument('--pretrain', action='store_true', help="Enable pretrain.")
 parser.add_argument('--background_volume', type=int, help="Set background volume.")
+parser.add_argument('--early_stop', action='store_true', help="Enable wandb log.")
 args = parser.parse_args()
 
 
@@ -80,269 +79,258 @@ if args.wandb:
             config=config
             )
 
-if args.task == 'base':
-   print('Base model')
+
 if args.debug:
   print('Debug mode, 1 epoch.')
 
-# Parameter generation
-training_parameters, data_processing_parameters = parameter_generation(args, config)  # To be parametrized
+# Load pretrained model 
+# DIL models:
+# model_name = 'base_dil_task_0_model.pth'
+# model_name = 'base_dil_joint_model.pth'
+# model_name = 'base_12_dil_task_0_model.pth'
+# fine-tune models:
+# model_name = 'finetune_dil_task_1_model.pth'
+# random ER models:
+# model_name = 'ER_random_dil_task_1_model.pth'
+# model_name = 'ER_random_dil_task_2_model.pth'
 
-# if args.method == 'ER_random' or 'ECBRS' or 'custum':
-#    training_parameters['batch_size'] = config['new_data_ratio']*training_parameters['batch_size']
+# DIL vol=9 models:
+# model_name = 'base20240414-231812dil_task_0_model.pth'
 
-# Dataset generation
-audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+# CIL models:
+model_name = 'base_cil_task_0_model.pth'
+# model_name = 'ER_random_cil_task_1_model.pth'
+# model_name = 'ER_random_cil_task_2_model.pth'
+# model_name = 'joint_12_cil_joint_model.pth'
 
-train_size = audio_processor.get_size('training')
-valid_size = audio_processor.get_size('validation')
-test_size = audio_processor.get_size('testing')
-print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
-
-# # Model generation and analysis
-# if args.task == 'dil_task_0' or args.task == 'dil_task_1' or \
-#    args.task == 'dil_task_2' or args.task == 'dil_task_3' or args.task == 'dil_joint':
-#   n_classes = config['n_classes'] + 2 # 35 words + 1 unknown + 1 silence
-
-if args.task == 'cil_task_0' and args.method != 'joint': # 1 to 17
-  n_classes = 17 + 2 # 17 words + 1 unknown + 1 silence
-  # n_classes = 35 + 2 
-
-elif args.task == 'cil_task_1' and args.method != 'joint': # 1 to 23
-  n_classes = 23 + 2 # 6 words + 1 unknown + 1 silence
-  # n_classes = 35 + 2 
-
-elif args.task == 'cil_task_2' and args.method != 'joint': # 1 to 29
-  n_classes = 29 + 2 # 6 words + 1 unknown + 1 silence
-  # n_classes = 35 + 2 
-
-elif (args.task == 'cil_task_3' or args.task == 'cil_joint') and args.method != 'joint': # 1 to 35
-  n_classes = 35 + 2 # 6 words + 1 unknown + 1 silence
-  # n_classes = 35 + 2
-else: 
-  n_classes = config['n_classes'] + 2 # 35 words + 1 unknown + 1 silence
+model_path = './models/' + model_name 
 
 
+if args.mode == 'dil':
+  if args.method == 'pretrain':
+    model = DSCNNS(use_bias = True, n_classes = config['n_classes']) # 35 words
+    model.to(device)
+    summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+    dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+    # count_ops(model, dummy_input)
 
-model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
-model.to(device)
-summary(model,(1,49,data_processing_parameters['feature_bin_count']))
-dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
-# count_ops(model, dummy_input)
-
-# Training initialization
-training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-
-# Removing stored inputs and activations
-remove_txt()
-
-print('Method:', args.method)
-pre_train = args.pretrain
-if pre_train:
-  print('Task '+args.task)
-  # Task 0. Train from scratch
-  # start=time.clock_gettime(0)
-  start=time.process_time()
-  
-  training_environment.train(model)
-  print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
-else:
-  print('Task: '+args.task)
-  start=time.process_time()
-  # Load pretrained model 
-  # DIL models:
-  # model_name = 'base_dil_task_0_model.pth'
-  # model_name = 'base_dil_joint_model.pth'
-  # model_name = 'base_12_dil_task_0_model.pth'
-  # fine-tune models:
-  # model_name = 'finetune_dil_task_1_model.pth'
-  # random ER models:
-  # model_name = 'ER_random_dil_task_1_model.pth'
-  # model_name = 'ER_random_dil_task_2_model.pth'
-
-  # DIL vol=9 models:
-  # model_name = 'base20240414-231812dil_task_0_model.pth'
-  
-  # CIL models:
-  # model_name = 'base_cil_task_0_model.pth'
-  # model_name = 'ER_random_cil_task_1_model.pth'
-  # model_name = 'ER_random_cil_task_2_model.pth'
-  model_name = 'joint_12_cil_joint_model.pth'
-  
-  model_path = './models/' + model_name 
-  # Load the state dict
-
-  if args.task == 'dil_task_0' or args.task == 'dil_task_1' or args.task == 'dil_task_2' \
-  or args.task == 'dil_task_3' or args.task == 'dil_joint' or args.task == 'cil_task_0' \
-  or args.task == 'cil_joint':
+    # Training initialization
+    training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+    print('Task '+args.task)
+    # Task 0. Train from scratch
+    # start=time.clock_gettime(0)
+    start=time.process_time()
     
-    model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
-  else:
-    if args.method == 'joint':
-      model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
-    else:
-
-      # cil_task_0: n_classes = 19
-      # cil_task_1: n_classes = 25
-      # cil_task_2: n_classes = 31 
-      # cil_task_3: n_classes = 37
-      # Load the state dict
-      state_dict = torch.load(model_path, map_location=torch.device('cuda'))
-
-      # Get the weights and biases of the old layer
-      old_weights = state_dict['fc1.weight']
-      old_bias = state_dict['fc1.bias']
-
-      # Create new weights and biases with the desired size
-      new_weights = torch.randn([n_classes, 64])
-      new_bias = torch.randn([n_classes])
-      if args.method == 'source_only' or args.method == 'base' or args.method == 'finetune':
-        n_classes_prev = 19
-      elif args.method == 'ER_random':
-        if args.task == 'cil_task_1':
-          n_classes_prev = 19
-        elif args.task == 'cil_task_2':
-          n_classes_prev = 25
-        elif args.task == 'cil_task_3':
-          n_classes_prev = 31
-      # Copy the old weights and biases into the new ones
-      new_weights[:n_classes_prev] = old_weights
-      new_bias[:n_classes_prev] = old_bias
-
-      # Replace the weights and biases in the state dict
-      state_dict['fc1.weight'] = new_weights
-      state_dict['fc1.bias'] = new_bias
-
-      # Load the modified state dict into the model
-      model.load_state_dict(state_dict)
-      # model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
-
-    
-  print('Load model from: ' + model_path)
-
-  if args.method == 'source_only':
-    print('Using source only model. No continual training needed.')
-  elif args.method == 'joint':
-    print('Using joint-training model. No continual training needed.')
-  else: 
-    
-    if args.method == 'finetune':
-      training_environment.continual_train(model)
-    elif args.method == 'ER_random':
-
-      # task 1:
-      print('ER_random')
-
-      if args.task == 'dil_task_1':
-        print('Starting ER_random on dil_task_1')
-        # initialize memory buffer
-        memory_buffer = {}
-        # input shape # ( 1, 49, 10])
-        # label shape # (1,)
-        memory_buffer['inputs'] = []
-        memory_buffer['labels'] = []
-        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = True)
-
-      elif args.task == 'dil_task_2':
-        print('Starting ER_random on dil_task_2')
-        # load memory buffer from ./buffer/dil_task_1_buffer_input
-        buffer_path_input = './buffer/dil_task_1_buffer_input.npy'
-        buffer_path_label = './buffer/dil_task_1_buffer_label.npy'
-        memory_buffer_inputs = np.load(buffer_path_input)
-        memory_buffer_labels = np.load(buffer_path_label)
-        memory_buffer = {}
-        memory_buffer['inputs'] = memory_buffer_inputs
-        memory_buffer['labels'] = memory_buffer_labels
-
-        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
-      elif args.task == 'dil_task_3':
-        print('Starting ER_random on dil_task_3')
-        # load memory buffer from ./buffer/dil_task_2_buffer_input
-        buffer_path_input = './buffer/dil_task_2_buffer_input.npy'
-        buffer_path_label = './buffer/dil_task_2_buffer_label.npy'
-        memory_buffer_inputs = np.load(buffer_path_input)
-        memory_buffer_labels = np.load(buffer_path_label)
-        memory_buffer = {}
-        memory_buffer['inputs'] = memory_buffer_inputs
-        memory_buffer['labels'] = memory_buffer_labels
-        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
-
-      # CIL tasks
-      elif args.task == 'cil_task_1':
-        print('Starting ER_random on cil_task_1')
-        # initialize memory buffer
-        memory_buffer = {}
-        # input shape # ( 1, 49, 10])
-        # label shape # (1,)
-        memory_buffer['inputs'] = []
-        memory_buffer['labels'] = []
-        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = True)
-
-      elif args.task == 'cil_task_2':
-        print('Starting ER_random on cil_task_2')
-        # load memory buffer from ./buffer/dil_task_1_buffer_input
-        buffer_path_input = './buffer/cil_task_1_buffer_input.npy'
-        buffer_path_label = './buffer/cil_task_1_buffer_label.npy'
-        memory_buffer_inputs = np.load(buffer_path_input)
-        memory_buffer_labels = np.load(buffer_path_label)
-        memory_buffer = {}
-        memory_buffer['inputs'] = memory_buffer_inputs
-        memory_buffer['labels'] = memory_buffer_labels
-
-        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
-      elif args.task == 'cil_task_3':
-        print('Starting ER_random on cil_task_3')
-        # load memory buffer from ./buffer/dil_task_2_buffer_input
-        buffer_path_input = './buffer/cil_task_2_buffer_input.npy'
-        buffer_path_label = './buffer/cil_task_2_buffer_label.npy'
-        memory_buffer_inputs = np.load(buffer_path_input)
-        memory_buffer_labels = np.load(buffer_path_label)
-        memory_buffer = {}
-        memory_buffer['inputs'] = memory_buffer_inputs
-        memory_buffer['labels'] = memory_buffer_labels
-        memory_buffer = training_environment.er_random_train(model,memory_buffer, base = False)
-
-      memory_buffer_inputs = memory_buffer['inputs']
-      memory_buffer_labels = memory_buffer['labels']
-      # convert to npy
-      memory_buffer_inputs = np.array(memory_buffer_inputs.cpu()) 
-      memory_buffer_labels = np.array(memory_buffer_labels.cpu())
-
-
-
-      input_name = args.task + '_buffer_input.npy'
-      label_name = args.task + '_buffer_label.npy'
-      buffer_path_input = './buffer/' + input_name
-      buffer_path_label = './buffer/' + label_name
-      np.save(buffer_path_input, memory_buffer_inputs)
-      np.save(buffer_path_label, memory_buffer_labels)
-      
-      # print ("Task 1 finished. Testing acc")
-      # acc = training_environment.validate(model, mode='testing', batch_size=-1, statistics=False)
-
+    training_environment.train(model,task_id='dil_task_0')
     print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
 
 
+elif args.mode == 'cil':
+
+  training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)  # To be parametrized
+
+  # Dataset generation
+  audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+  train_size = audio_processor.get_size('training')
+  valid_size = audio_processor.get_size('validation')
+  test_size = audio_processor.get_size('testing')
+  print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+  # Removing stored inputs and activations
+  remove_txt()
+
+  if args.method == 'pretrain':
+    print('Training model on cil_task_0...')
+    n_classes = 19
+    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    model.to(device)
+    summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+    dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+    # count_ops(model, dummy_input)
+
+    # Training initialization
+    training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+    # print('Task '+args.task)
+    # Task 0. Train from scratch
+    # start=time.clock_gettime(0)
+    start=time.process_time()
+    
+    training_environment.train(model,task_id='cil_task_0')
+    print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
+
+  elif args.method == 'joint':
+    print('Using joint-training model. No continual training needed.')
+    # Loaded model has n_classes = 35 + 2 = 37
+    n_classes = config['n_classes'] + 2 # 35 + 2
+    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    model.to(device)
+    summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+    dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+    # count_ops(model, dummy_input)
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+    training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+    print('Using joint-training model. No continual training needed.')
+    print ("Testing Accuracy...")
+
+    for i in range(4):
+        task_id = f'cil_task_{i}'
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
+        print(f'Test Accuracy of Task {i}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_task_{i}': acc_task})
+
+  elif args.method == 'source_only':
+      # Loaded model has n_classes = 19
+      print('Using source-only model. No continual training needed.')
+      for i in range(4):
+        n_classes = 19
+        model = DSCNNS(use_bias = True, n_classes = n_classes)
+        model.to(device)
+        
+        dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+        # count_ops(model, dummy_input)
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+        task_id = str(f'cil_task_{i}')
+        if i == 0:
+          summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        else:
+          new_classes = 6 * i
+          fc_new= torch.nn.Linear(64, n_classes + new_classes)
+          if model.fc1 is not None:
+            weight = copy.deepcopy(model.fc1.weight.data)
+            bias = copy.deepcopy(model.fc1.bias.data)
+            # copy old weights and biases to fc_new
+            fc_new.weight.data[:n_classes] = weight
+            fc_new.bias.data[:n_classes] = bias
+            # replace fc1 with fc_new
+            model.fc1 = fc_new
+
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
+        print(f'Test Accuracy of Task {i}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_task_{i}': acc_task})
+
+  elif args.method == 'finetune':
+     
+    print('Start Fine-tuning...')
+    tasks = ['cil_task_1', 'cil_task_2', 'cil_task_3']
+    n_classes = 19
+    new_classes_per_task = 6
+    
+    for i, task_id in enumerate(tasks): # i: 0, 1, 2
+
+        if i == 0:
+          model = DSCNNS(use_bias = True, n_classes = n_classes).to(device)
+          model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+          print('Model loaded from ', model_path)
+          summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        fc_new= torch.nn.Linear(64, n_classes + new_classes_per_task) # 19 + 6 = 25, 19 + 12 = 31, 19 + 18 = 37
+        if model.fc1 is not None:
+            weight = copy.deepcopy(model.fc1.weight.data)
+            bias = copy.deepcopy(model.fc1.bias.data)
+            # copy old weights and biases to fc_new
+            fc_new.weight.data[:n_classes] = weight
+            fc_new.bias.data[:n_classes] = bias
+            # replace fc1 with fc_new
+            model.fc1 = fc_new
+
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        print(f'Fine-tuning on {task_id}...')
+        model = training_environment.finetune(model, task_id)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+
+        if i < len(tasks) - 1:  # No need to delete and recreate for the last task
+            del audio_processor
+            del training_environment
+
+            training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)  # To be parametrized
+            audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+            train_size = audio_processor.get_size('training')
+            valid_size = audio_processor.get_size('validation')
+            test_size = audio_processor.get_size('testing')
+            print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+        n_classes += new_classes_per_task
+
+    # Save the model
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    model_name = args.mode + '_' + args.method + '_' + timestr + '.pth'
+    PATH = './models/' + model_name
+    torch.save(model.state_dict(), PATH)
+    print('Model saved at ', PATH)
+        
+  elif args.method == 'ER_NRS':
+
+    print('Start ER_NRS')
+    # initialize memory buffer
+    memory_buffer = Buffer_NRS(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
+    # prepare data
+    data = dataset.AudioGenerator('training', audio_processor, training_parameters, 'cil_task_0', task = None)
+    for minibatch in range(int(config['memory_buffer_size']/128)):
+        # return a random batch of data with batch size 128.
+        inputs_mb, labels_mb, _ = data[0]
+        inputs_mb = torch.Tensor(inputs_mb[:,None,:,:]).to(device) # ([128, 1, 49, 10])
+        labels_mb = torch.Tensor(labels_mb).to(device).long() # ([128])
+        memory_buffer.add_data(inputs_mb, labels_mb)
+    print('Memory buffer initialized. Size:', memory_buffer.get_size())
+    # delete data
+    del data
 
     
+    tasks = ['cil_task_1', 'cil_task_2', 'cil_task_3']
+    n_classes = 19
+    new_classes_per_task = 6
+    
+    for i, task_id in enumerate(tasks): # i: 0, 1, 2
 
+        if i == 0:
+          model = DSCNNS(use_bias = True, n_classes = n_classes).to(device)
+          model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+          print('Model loaded from ', model_path)
+          summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        fc_new= torch.nn.Linear(64, n_classes + new_classes_per_task) # 19 + 6 = 25, 19 + 12 = 31, 19 + 18 = 37
+        if model.fc1 is not None:
+            weight = copy.deepcopy(model.fc1.weight.data)
+            bias = copy.deepcopy(model.fc1.bias.data)
+            # copy old weights and biases to fc_new
+            fc_new.weight.data[:n_classes] = weight
+            fc_new.bias.data[:n_classes] = bias
+            # replace fc1 with fc_new
+            model.fc1 = fc_new
 
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        print(f'Fine-tuning on {task_id}...')
+        model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
 
-# Perform ODDA
-# odda = False
-# if odda:
-#   # Load pretrained model
-#   model.load_state_dict(torch.load('./pretrain2_ordered_v3_fixFilfixUttr.pth', map_location=torch.device('cuda')))
-#   environmental_noise = 'TMETRO'
-#   training_environment.adapt(model, environmental_noise)
+        if i < len(tasks) - 1:  # No need to delete and recreate for the last task
+            del audio_processor
+            del training_environment
 
-# # Accuracy on the training set. 
-# print ("Training acc")
-# acc = training_environment.validate(model, mode='training', batch_size=-1, statistics=False)
-# Accuracy on the validation set. 
-# print ("Validation acc")
-# acc = training_environment.validate(model, mode='validation', batch_size=-1, statistics=False)
-# Accuracy on the testing set. 
-print ("Testing acc")
-acc = training_environment.validate(model, mode='testing', batch_size=-1, statistics=False)
+            training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)  # To be parametrized
+            audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+            train_size = audio_processor.get_size('training')
+            valid_size = audio_processor.get_size('validation')
+            test_size = audio_processor.get_size('testing')
+            print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+        n_classes += new_classes_per_task
+
+    # Save the model
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    model_name = args.mode + '_' + args.method + '_' + timestr + '.pth'
+    PATH = './models/' + model_name
+    torch.save(model.state_dict(), PATH)
+    print('Model saved at ', PATH)
+
 

@@ -6,11 +6,12 @@ data_url: 'https://storage.googleapis.com/download.tensorflow.org/data/speech_co
 noise_dir: '/usr/scratch/sassauna2/sem24f39/DEMAND/dataset_48k' # linux
 noise_dataset: 'demand'
 # hyperparameters
-epochs: 60
-epochs_CL: 16
+epochs: 200
+epochs_CL: 1
 n_classes: 35
 # n_classes: 12
 batch_size: 128
+new_data_ratio: 0.5
 silence_percentage: 10.0
 unknown_percentage: 10.0
 validation_percentage: 10.0
