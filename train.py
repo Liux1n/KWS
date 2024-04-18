@@ -251,6 +251,9 @@ class Train():
                 num_iter = int((17/35)*num_iter)
             elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
                 num_iter = int((6/35)*num_iter)
+            
+            elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
+                num_iter = int((3/18)*num_iter)
 
             num_seen_samples = 0  # This counts all samples processed so far
 
@@ -330,6 +333,10 @@ class Train():
                 num_iter = int((17/35)*num_iter)
             elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
                 num_iter = int((6/35)*num_iter)
+
+            elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
+                num_iter = int((3/18)*num_iter)
+
             for minibatch in range(num_iter): 
             
 

@@ -56,9 +56,9 @@ parser.add_argument('--mode',
                   help='training mode (default: cil)')
 
 parser.add_argument('--method', 
-                  choices=['base','source_only', 'finetune', 'joint', 'ER_NRS', 'ECBRS', 'custum','pretrain'
+                  choices=['source_only', 'finetune', 'joint', 'ER_NRS', 'ECBRS', 'custum','base_pretrain', 'joint_pretrain'
                            ], 
-                  default='base',
+                  default='base_pretrain',
                   required=True,
                   help='training  method (default: base)')
 
@@ -71,11 +71,13 @@ parser.add_argument('--background_volume', type=int, help="Set background volume
 parser.add_argument('--early_stop', action='store_true', help="Enable wandb log.")
 args = parser.parse_args()
 
-
+time_str = time.strftime("%Y%m%d-%H%M%S")
+run_name = args.mode + '_' + args.method + '_' + time_str
 if args.wandb:
   wandb.init(
             project=config['project_name'], 
             entity="liux1n", 
+            name=run_name,
             config=config
             )
 
@@ -85,7 +87,7 @@ if args.debug:
 
 # Load pretrained model 
 # DIL models:
-# model_name = 'base_dil_task_0_model.pth'
+model_name = 'base_dil_task_0_model.pth'
 # model_name = 'base_dil_joint_model.pth'
 # model_name = 'base_12_dil_task_0_model.pth'
 # fine-tune models:
@@ -98,7 +100,7 @@ if args.debug:
 # model_name = 'base20240414-231812dil_task_0_model.pth'
 
 # CIL models:
-model_name = 'base_cil_task_0_model.pth'
+# model_name = 'base_cil_task_0_model.pth'
 # model_name = 'ER_random_cil_task_1_model.pth'
 # model_name = 'ER_random_cil_task_2_model.pth'
 # model_name = 'joint_12_cil_joint_model.pth'
@@ -107,8 +109,24 @@ model_path = './models/' + model_name
 
 
 if args.mode == 'dil':
-  if args.method == 'pretrain':
-    model = DSCNNS(use_bias = True, n_classes = config['n_classes']) # 35 words
+
+  if args.method == 'base_pretrain':
+
+    training_parameters, data_processing_parameters = parameter_generation(args, config, task_id='dil_task_0')
+
+    # Dataset generation
+    audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+    train_size = audio_processor.get_size('training')
+    valid_size = audio_processor.get_size('validation')
+    test_size = audio_processor.get_size('testing')
+    print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+    # Removing stored inputs and activations
+    remove_txt()
+    print('Training model on dil_task_0...')
+    n_classes = config['n_classes'] + 2
+    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
     model.to(device)
     summary(model,(1,49,data_processing_parameters['feature_bin_count']))
     dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -116,14 +134,226 @@ if args.mode == 'dil':
 
     # Training initialization
     training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-    print('Task '+args.task)
-    # Task 0. Train from scratch
-    # start=time.clock_gettime(0)
+    
     start=time.process_time()
     
-    training_environment.train(model,task_id='dil_task_0')
+    training_environment.train(model,task_id=None)
     print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
+  
+  elif args.method == 'joint_pretrain':
 
+    training_parameters, data_processing_parameters = parameter_generation(args, config, task_id='dil_joint')
+
+    # Dataset generation
+    audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+    train_size = audio_processor.get_size('training')
+    valid_size = audio_processor.get_size('validation')
+    test_size = audio_processor.get_size('testing')
+    print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+    # Removing stored inputs and activations
+    remove_txt()
+    print('Joint-Training model...')
+    n_classes = config['n_classes'] + 2
+    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    model.to(device)
+    summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+    dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+    # count_ops(model, dummy_input)
+
+    # Training initialization
+    training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+    
+    start=time.process_time()
+    training_environment.train(model,task_id=None)
+
+    print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
+  
+  elif args.method == 'joint':
+    print('Using joint-training model. No continual training needed.')
+    # tasks = ['dil_task_0', 'dil_task_1', 'dil_task_2', 'dil_task_3']
+    for i in range(4):
+        
+      task_id = f'dil_task_{i}'
+      training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id)
+
+      # Dataset generation
+      audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+      train_size = audio_processor.get_size('training')
+      valid_size = audio_processor.get_size('validation')
+      test_size = audio_processor.get_size('testing')
+      print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+      
+      # Loaded model has n_classes = 35 + 2 = 37
+      n_classes = config['n_classes'] + 2 # 35 + 2
+      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+      model.to(device)
+      if i == 0:
+        summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+      dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+      # count_ops(model, dummy_input)
+      model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+      training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+      print ("Testing Accuracy on ", task_id, '...')
+      acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+      print(f'Test Accuracy of Task {i}: ', acc_task)
+      if args.wandb:
+          wandb.log({f'ACC_task_{i}': acc_task})
+
+      del audio_processor
+      del training_environment
+
+  elif args.method == 'source_only':
+    print('Using source-only model. No continual training needed.')
+    # tasks = ['dil_task_0', 'dil_task_1', 'dil_task_2', 'dil_task_3']
+    
+    for i in range(4):
+        
+      task_id = f'dil_task_{i}'
+      training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id)
+
+      # Dataset generation
+      audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+      train_size = audio_processor.get_size('training')
+      valid_size = audio_processor.get_size('validation')
+      test_size = audio_processor.get_size('testing')
+      print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+      
+      # Loaded model has n_classes = 35 + 2 = 37
+      n_classes = config['n_classes'] + 2 # 35 + 2
+      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+      model.to(device)
+      
+      dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+      # count_ops(model, dummy_input)
+      model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+      if i == 0:
+        summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        print('Model loaded from ', model_path)
+      
+      training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+      print ("Testing Accuracy on ", task_id, '...')
+      acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+      print(f'Test Accuracy of Task {i}: ', acc_task)
+      if args.wandb:
+          wandb.log({f'ACC_task_{i}': acc_task})
+
+      del audio_processor
+      del training_environment
+  
+  elif args.method == 'finetune':
+     
+    print('Start Fine-tuning...')
+    tasks = ['dil_task_0','dil_task_1', 'dil_task_2', 'dil_task_3']
+    n_classes = config['n_classes'] + 2 # 35 + 2
+    
+    for i, task_id in enumerate(tasks): # i: 0, 1, 2, 3
+
+      training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id)
+      # Dataset generation
+      audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+      train_size = audio_processor.get_size('training')
+      valid_size = audio_processor.get_size('validation')
+      test_size = audio_processor.get_size('testing')
+      print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+      if i == 0:
+        model = DSCNNS(use_bias = True, n_classes = n_classes).to(device)
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+        print('Model loaded from ', model_path)
+        summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+
+      else:
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        print(f'Fine-tuning on {task_id}...')
+        model = training_environment.finetune(model, task_id=task_id)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+
+      del audio_processor
+      del training_environment
+
+
+    # Save the model
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    model_name = args.mode + '_' + args.method + '_' + timestr + '.pth'
+    PATH = './models/' + model_name
+    torch.save(model.state_dict(), PATH)
+    print('Model saved at ', PATH)
+  
+  elif args.method == 'ER_NRS':
+     
+    print('Start ER_NRS')
+    tasks = ['dil_task_0','dil_task_1', 'dil_task_2', 'dil_task_3']
+    n_classes = config['n_classes'] + 2 # 35 + 2
+    
+    for i, task_id in enumerate(tasks): # i: 0, 1, 2, 3
+
+      training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id)
+      # Dataset generation
+      audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+      train_size = audio_processor.get_size('training')
+      valid_size = audio_processor.get_size('validation')
+      test_size = audio_processor.get_size('testing')
+      print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+      if i == 0:
+        # initialize memory buffer
+        memory_buffer = Buffer_NRS(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
+        # prepare data
+        data = dataset.AudioGenerator('training', audio_processor, training_parameters, task_id, task = None)
+        for minibatch in range(int(config['memory_buffer_size']/128)):
+            # return a random batch of data with batch size 128.
+            inputs_mb, labels_mb, _ = data[0]
+            inputs_mb = torch.Tensor(inputs_mb[:,None,:,:]).to(device) # ([128, 1, 49, 10])
+            labels_mb = torch.Tensor(labels_mb).to(device).long() # ([128])
+            memory_buffer.add_data(inputs_mb, labels_mb)
+        print('Memory buffer initialized. Size:', memory_buffer.get_size())
+        # delete data
+        del data
+
+        model = DSCNNS(use_bias = True, n_classes = n_classes).to(device)
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+        print('Model loaded from ', model_path)
+        summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+
+      else:
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        print(f'Conintual Training on {task_id}...')
+        model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+
+      del audio_processor
+      del training_environment
+
+
+    # Save the model
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    model_name = args.mode + '_' + args.method + '_' + timestr + '.pth'
+    PATH = './models/' + model_name
+    torch.save(model.state_dict(), PATH)
+    print('Model saved at ', PATH)
+        
 
 elif args.mode == 'cil':
 
@@ -140,7 +370,7 @@ elif args.mode == 'cil':
   # Removing stored inputs and activations
   remove_txt()
 
-  if args.method == 'pretrain':
+  if args.method == 'base_pretrain':
     print('Training model on cil_task_0...')
     n_classes = 19
     model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
@@ -157,6 +387,25 @@ elif args.mode == 'cil':
     start=time.process_time()
     
     training_environment.train(model,task_id='cil_task_0')
+    print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
+  
+  elif args.method == 'joint_pretrain':
+    print('Joint-Training model...')
+    n_classes = 37
+    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    model.to(device)
+    summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+    dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+    # count_ops(model, dummy_input)
+
+    # Training initialization
+    training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+    # print('Task '+args.task)
+    # Task 0. Train from scratch
+    # start=time.clock_gettime(0)
+    start=time.process_time()
+    
+    training_environment.train(model,task_id='cil_joint')
     print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
 
   elif args.method == 'joint':
@@ -305,7 +554,7 @@ elif args.mode == 'cil':
             model.fc1 = fc_new
 
         training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        print(f'Fine-tuning on {task_id}...')
+        print(f'Conintual Training on {task_id}...')
         model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
         acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
         print(f'Test Accuracy of {task_id}: ', acc_task)
