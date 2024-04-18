@@ -3,6 +3,31 @@ import unittest
 import numpy as np
 # from utils import Buffer
 
+def task_average_forgetting(acc_matrix):
+    # Number of tasks (not including the final model evaluation)
+    num_tasks = acc_matrix.shape[0]
+
+    # Initialize the forgetting list
+    forgetting = []
+
+    # Calculate the maximum accuracy for each task from stages before the last and the last accuracy
+    for task_index in range(num_tasks):
+        # Filter out zero values but include the last value in case it's the only record
+        filtered_acc = acc_matrix[task_index][acc_matrix[task_index] != 0]
+        if len(filtered_acc) > 1:
+            max_acc_before_last = np.max(filtered_acc[:-1])  # Maximum before the last training
+            last_acc = filtered_acc[-1]  # The last training result
+            forgetting.append(max_acc_before_last - last_acc)
+        elif len(filtered_acc) == 1:  # Only one non-zero entry, no forgetting possible
+            forgetting.append(0)
+
+    # Calculate average forgetting
+    if len(forgetting) > 0:
+        average_forgetting = np.mean(forgetting)
+    else:
+        average_forgetting = 0  # In case all entries were zero and filtered out
+
+    return average_forgetting / 100
 
     
 class Buffer_NRS:
@@ -121,4 +146,15 @@ class TestBuffer(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    # unittest.main()
+    # Provided accuracy matrix
+    acc_matrix = np.array([
+        [71.32000661, 0., 0., 0.],
+        [69.72575582, 65.62861391, 0., 0.],
+        [70.66743763, 65.87642491, 68.98232282, 0.],
+        [70.21311746, 65.53774988, 68.66842888, 64.97604494]
+    ])
+
+    # Calculate and print the average forgetting
+    average_forgetting = task_average_forgetting(acc_matrix)
+    print(average_forgetting)

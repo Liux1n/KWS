@@ -184,7 +184,7 @@ class AudioProcessor(object):
     self.background_noise_test = []
     self.background_noise_test_name = []
 
-    print (training_parameters)
+    # print(training_parameters)
 
     background_dir = os.path.join(training_parameters['noise_dir'])
     if not os.path.exists(background_dir):
@@ -293,6 +293,23 @@ class AudioProcessor(object):
                         'marvin','nine','one','seven','sheila','six',
                         'three','tree','two','visual','wow','zero'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        
+        elif task_id == 'cil_task_0_disjoint':
+          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        
+        elif task_id == 'cil_task_1_disjoint':
+          labels = set(['follow','forward','four','happy','house','learn'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif task_id == 'cil_task_2_disjoint':
+          labels = set(['marvin','nine','one','seven','sheila','six'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif task_id == 'cil_task_3_disjoint':
+          labels = set(['three','tree','two','visual','wow','zero'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+          
         else:
           pass
 

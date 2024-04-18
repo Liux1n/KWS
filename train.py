@@ -126,8 +126,10 @@ class Train():
                     if statistics == True:
                         # conf_matrix(labels, predicted, self.training_parameters)
                         per_noise_accuracy(labels, predicted, noises)
-
-        print('Accuracy of the network on the %s set: %.2f %%' % (mode, 100 * correct / total))
+        if mode == 'validation':
+            print('Accuracy of the network on the %s set: %.2f %%' % (mode, 100 * correct / total))
+        elif mode == 'testing':
+            pass
         if self.args.wandb:
             wandb.log({'val_accuracy': 100 * correct / total})
         return(100 * correct / total)
@@ -213,7 +215,7 @@ class Train():
 
         timestr = time.strftime("%Y%m%d-%H%M%S")
 
-        model_name = model_name = self.args.method + '_' + timestr + '_' + self.args.task + str(best_ep) + '_acc' + str(best_acc) + '.pth'
+        model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
         PATH = './models/' + model_name
 
         torch.save(best_state_dict, PATH)
