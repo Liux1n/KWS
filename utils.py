@@ -80,46 +80,14 @@ def conf_matrix(labels, predicted, training_parameters):
     sn.heatmap(df_cm, annot=True)
     plt.show()
 
-# def task_average_forgetting(acc_matrix):
-#     # Number of tasks (not including the final model evaluation)
-#     num_tasks = acc_matrix.shape[0]
 
-#     # Initialize the forgetting list
-#     forgetting = []
-
-#     # Calculate the maximum accuracy for each task from stages before the last and the last accuracy
-#     for task_index in range(num_tasks):
-#         # Filter out zero values but include the last value in case it's the only record
-#         filtered_acc = acc_matrix[task_index][acc_matrix[task_index] != 0]
-#         if len(filtered_acc) > 1:
-#             max_acc_before_last = np.max(filtered_acc[:-1])  # Maximum before the last training
-#             last_acc = filtered_acc[-1]  # The last training result
-#             forgetting.append(max_acc_before_last - last_acc)
-#         elif len(filtered_acc) == 1:  # Only one non-zero entry, no forgetting possible
-#             forgetting.append(0)
-
-#     # Calculate average forgetting
-#     if len(forgetting) > 0:
-#         average_forgetting = np.mean(forgetting)
-#     else:
-#         average_forgetting = 0  # In case all entries were zero and filtered out
-
-#     return average_forgetting / 100
 def task_average_forgetting(acc_matrix):
-    # Number of tasks
-    t = acc_matrix.shape[0]
-    
-    # Initialize an array to store the maximum forgetting for each task (except the last one)
-    forgetting = np.zeros(t - 1)
-    
-    # Calculate forgetting for each task (except the last one)
-    for i in range(t - 1):
-        historical_max = np.max(acc_matrix[i, :i+1])  # Highest accuracy observed for task i during its training phase
-        final_acc = acc_matrix[i, t-1]                # Final accuracy of task i after all tasks have been trained
-        forgetting[i] = historical_max - final_acc    # Forgetting is the reduction from historical maximum to final accuracy
-    
-    # Compute average forgetting
+
+    acc_final = acc_matrix[-1,:]
+    acc_best = np.max(acc_matrix, axis = 0)
+    forgetting = acc_best - acc_final
     average_forgetting = np.mean(forgetting)/100
+
     return average_forgetting
 
 
@@ -274,10 +242,7 @@ def parameter_generation(args=None, config=None, task_id=None):
             # not used.
             training_parameters['noise_test'] = ['DKITCHEN']
 
-            training_parameters['noise_train'] = ['DKITCHEN']
-        
-
-                
+            training_parameters['noise_train'] = ['DKITCHEN']       
             
     else:
         training_parameters['noise_dir'] = config['data_dir']+'/_background_noise_'
@@ -328,6 +293,116 @@ class Buffer_NRS:
         self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
         print("Buffer initialized")
     
+    def to_device(self, model_device):
+        # Move the buffer to the device of the model
+        self.buffer['examples'] = self.buffer['examples'].to(model_device)
+        self.buffer['labels'] = self.buffer['labels'].to(model_device)
+
+    def naive_reservoir(self) -> int:
+        """
+        Naive Reservoir Sampling algorithm.
+
+        """
+        # if self.num_seen_examples < self.buffer_size:
+        #     return self.num_seen_examples
+
+        rand = np.random.randint(0, self.num_seen_examples + 1)
+        if rand < self.buffer_size:
+            return rand
+        else:
+            return -1
+
+    def add_data(self, examples, labels):
+        """
+        Add data to the buffer.
+        examples: torch.Size([128, 1, 49, 10])
+        labels: torch.Size([128])
+        """
+        input_size = examples.size(0)
+        current_buffer_size = self.buffer['examples'].size(0)
+        # if buffer is not full, add batch data to buffer
+        if current_buffer_size < self.buffer_size:
+            
+            self.buffer['examples'][current_buffer_size:current_buffer_size + input_size] = examples
+            self.buffer['labels'][current_buffer_size:current_buffer_size + input_size] = labels
+            self.num_seen_examples += input_size
+            # print("Data added to buffer")
+        else:
+            # assert current_buffer_size == self.buffer_size
+            for i in range(input_size):
+                sample_index = self.naive_reservoir()
+                # print(sample_index)
+                if sample_index != -1:
+                    self.buffer['examples'][sample_index] = examples[i]
+                    self.buffer['labels'][sample_index] = labels[i]
+                    # print("Data added to buffer")
+                    self.num_seen_examples += 1
+
+    def get_data(self):
+        """
+        Get data from the buffer.
+        """
+        # indices = torch.randperm(self.num_seen_examples)[:self.batch_size]
+        # return self.buffer['examples'][indices], self.buffer['labels'][indices]
+        indices = torch.randperm(self.buffer_size).to(self.buffer['examples'].device)[:self.batch_size]
+        # print(indices)
+        return self.buffer['examples'][indices], self.buffer['labels'][indices]
+        
+    
+    def get_size(self):
+        """
+        Get the number of examples in the buffer.
+        """
+        num_examples = self.buffer['examples'].size(0)
+        num_labels = self.buffer['labels'].size(0)
+        assert num_examples == num_labels
+        return num_examples
+
+    def reset_num_seen_examples(self):
+        """
+        Reset the number of seen examples.
+        """
+        self.num_seen_examples = 0
+
+    def is_empty(self):
+        """
+        Check if the buffer is empty.
+        """
+        return self.num_seen_examples == 0  
+    
+    def get_class_count(self):
+        """
+        Get the number of examples for each class in the buffer.
+        """
+        class_count = {}
+        for label in self.buffer['labels']:
+            if label.item() in class_count:
+                class_count[label.item()] += 1
+            else:
+                class_count[label.item()] = 1
+        return class_count
+
+class Buffer_CB:
+    """
+    The memory buffer of rehearsal method.
+    """
+    def __init__(self, buffer_size, batch_size, device):
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.device = device
+        self.num_seen_examples = 0
+        self.buffer = {}
+        self.attributes = ['examples', 'labels']
+        self.num_classes_init = 19
+        self.num_new_classes = 6
+        self.buffer['examples'] = torch.empty((self.buffer_size, 1, 49, 10), device=self.device)
+        self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
+
+        # devide the buffer into 19 parts, each part for one class. Dont actually devide the buffer,
+        # but mark the start and end of each class in the buffer.
+    
+        print("Buffer initialized")
+    
     def naive_reservoir(self) -> int:
         """
         Naive Reservoir Sampling algorithm.
@@ -349,17 +424,18 @@ class Buffer_NRS:
         labels: torch.Size([128])
         """
         input_size = examples.size(0)
+        current_buffer_size = self.buffer['examples'].size(0)
         # if buffer is not full, add batch data to buffer
-        if self.num_seen_examples < self.buffer_size:
+        if current_buffer_size < self.buffer_size:
             
-            self.buffer['examples'][self.num_seen_examples:self.num_seen_examples + input_size] = examples
-            self.buffer['labels'][self.num_seen_examples:self.num_seen_examples + input_size] = labels
+            self.buffer['examples'][current_buffer_size:current_buffer_size + input_size] = examples
+            self.buffer['labels'][current_buffer_size:current_buffer_size + input_size] = labels
             self.num_seen_examples += input_size
             # print("Data added to buffer")
         else:
-            
+            assert current_buffer_size == self.buffer_size
             for i in range(input_size):
-                sample_index = self.naive_reservoir(self.num_seen_examples, self.buffer_size)
+                sample_index = self.naive_reservoir()
                 if sample_index != -1:
                     self.buffer['examples'][sample_index] = examples[i]
                     self.buffer['labels'][sample_index] = labels[i]

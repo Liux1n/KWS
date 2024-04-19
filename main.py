@@ -98,16 +98,14 @@ if args.debug:
 # model_name = 'dil_joint_pretrain_20240419-03430430.pth'
 
 # DIL base pretrain
-# model_name = 'dil_base_pretrain.pth'
+model_name = 'dil_base_pretrain.pth'
 
-# CIL models:
-# model_name = 'base_cil_task_0_model.pth'
 
 # CIL joint
 # model_name = 'cil_joint_pretrain_20240418-23171014.pth'
 
 # CIL base pretrain
-model_name = 'cil_base_pretrain_20240419-02554315.pth'
+# model_name = 'cil_base_pretrain_20240419-02554315.pth'
 
 # CIL er_nrs
 
@@ -437,7 +435,8 @@ if args.mode == 'dil':
         memory_buffer = Buffer_NRS(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
         # prepare data
         data = dataset.AudioGenerator('training', audio_processor, training_parameters, task_id, task = None)
-        for minibatch in range(int(config['memory_buffer_size']/128)):
+        # for minibatch in range(int(config['memory_buffer_size']/128)):
+        for minibatch in range(int(len(data))):
             # return a random batch of data with batch size 128.
             inputs_mb, labels_mb, _ = data[0]
             inputs_mb = torch.Tensor(inputs_mb[:,None,:,:]).to(device) # ([128, 1, 49, 10])
@@ -446,7 +445,7 @@ if args.mode == 'dil':
         print('Memory buffer initialized. Size:', memory_buffer.get_size())
         # delete data
         del data
-
+        
         model = DSCNNS(use_bias = True, n_classes = n_classes).to(device)
         model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
         print('Model loaded from ', model_path)
@@ -460,9 +459,10 @@ if args.mode == 'dil':
       else:
         training_environment = Train(audio_processor, training_parameters, model, device, args, config)
         print(f'Conintual Training on {task_id}...')
+        # # reset num_seen_examples in memory buffer
+        # memory_buffer.reset_num_seen_examples()
         model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
-        # reset num_seen_examples in memory buffer
-        memory_buffer.reset_num_seen_examples()
+        
         acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
         print(f'Test Accuracy of {task_id}: ', acc_task)
         if args.wandb:
@@ -822,7 +822,8 @@ elif args.mode == 'cil':
         memory_buffer = Buffer_NRS(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
         # prepare data
         data = dataset.AudioGenerator('training', audio_processor, training_parameters, 'cil_task_0', task = None)
-        for minibatch in range(int(config['memory_buffer_size']/128)):
+        # for minibatch in range(int(config['memory_buffer_size']/128)):
+        for minibatch in range(int(len(data))):
             # return a random batch of data with batch size 128.
             inputs_mb, labels_mb, _ = data[0]
             inputs_mb = torch.Tensor(inputs_mb[:,None,:,:]).to(device) # ([128, 1, 49, 10])
@@ -854,9 +855,9 @@ elif args.mode == 'cil':
 
         training_environment = Train(audio_processor, training_parameters, model, device, args, config)
         print(f'Conintual Training on {task_id}...')
+
         model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
-        # reset num_seen_examples in memory buffer
-        memory_buffer.reset_num_seen_examples()
+        
         acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
         print(f'Test Accuracy of {task_id}: ', acc_task)
         if args.wandb:
@@ -892,8 +893,6 @@ elif args.mode == 'cil':
       print("Task-average Forgetting:", average_forgetting)
       if args.wandb:
         wandb.log({'Task-average Forgetting': average_forgetting})
-
-      
 
     # Save the model
     timestr = time.strftime("%Y%m%d-%H%M%S")

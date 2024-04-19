@@ -232,91 +232,6 @@ class Train():
         torch.save(best_state_dict, PATH)
 
 
-    def ER_NRS(self, 
-                model, 
-                memory_buffer, 
-                task_id = None,):
-    
-        # memory_buffer = memory_buffer.to(self.device)
-        memory_buffer_size = self.config['memory_buffer_size']
-        # Train model
-        best_acc = 0
-        num_epochs = 1 if self.args.debug else self.config['epochs_CL']
-
-  
-        for epoch in range(0, num_epochs):
-
-            data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
-            print("Data length: " + str(len(data))) # 288
-            
-            print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
-
-            model.train()
-            self.scheduler.step()
-
-            running_loss = 0.0
-            total = 0
-            correct = 0   
-
-            # num_iter = 20 if self.training_parameters['debug'] else len(data)
-            num_iter = len(data)
-            if task_id == 'cil_task_0':
-                num_iter = int((17/35)*num_iter)
-            elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
-                num_iter = int((6/35)*num_iter)
-            
-            # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
-            #     num_iter = int((3/18)*num_iter)
-
-            num_seen_samples = 0  # This counts all samples processed so far
-
-            for minibatch in range(num_iter): 
-
-                inputs, labels, _ = data[0]
-                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
-                labels = torch.Tensor(labels).to(self.device).long()
-                
-                samples_inputs, samples_labels = memory_buffer.get_data()
-                samples_inputs = samples_inputs.to(self.device)
-                samples_labels = samples_labels.to(self.device).long()
-                # samples_labels = torch.Tensor(samples_labels).to(self.device).long()
-                inputs = torch.cat((inputs, samples_inputs), 0) # torch.Size([256, 1, 49, 10])
-                labels = torch.cat((labels, samples_labels), 0) # torch.Size([256])
-
-                # Zero out the parameter gradients after each mini-batch
-                self.optimizer.zero_grad()
-
-                # Train, compute loss, update optimizer
-                model = model.to(self.device)
-                outputs = F.softmax(model(inputs), dim=1)
-                loss = self.criterion(outputs, labels)
-                loss.backward()
-                self.optimizer.step()
-
-                # Compute training statistics
-                running_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-
-                # Print information every 50 minibatches
-                if minibatch % 50 == 0: 
-                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
-                    if self.args.wandb:
-                        wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
-                    running_loss = 0.0
-
-            tmp_acc = self.validate(model, 'validation', task_id = task_id)
-
-        
-        # model_name = self.args.method + '_' + self.args.task + '_model.pth'
-        # PATH = './models/' + model_name
-        # torch.save(model.state_dict(), PATH)
-
-
-        return model, memory_buffer
-
-
     def finetune(self, model, task_id = None): 
     
         
@@ -383,6 +298,102 @@ class Train():
             tmp_acc = self.validate(model, 'validation', task_id = task_id)
 
         return model
+    
+    def ER_NRS(self, 
+                model, 
+                memory_buffer, 
+                task_id = None,):
+    
+        # memory_buffer = memory_buffer.to(self.device)
+        memory_buffer_size = self.config['memory_buffer_size']
+        # Train model
+        best_acc = 0
+        num_epochs = 1 if self.args.debug else self.config['epochs_CL']
+        memory_buffer.to_device(self.device)
+  
+        for epoch in range(0, num_epochs):
+
+            data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
+            print("Data length: " + str(len(data))) # 288
+            
+            print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
+
+            model.train()
+            self.scheduler.step()
+
+            running_loss = 0.0
+            total = 0
+            correct = 0   
+
+            # num_iter = 20 if self.training_parameters['debug'] else len(data)
+            num_iter = len(data)
+            if task_id == 'cil_task_0':
+                num_iter = int((17/35)*num_iter)
+            elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
+                num_iter = int((6/35)*num_iter)
+            
+            # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
+            #     num_iter = int((3/18)*num_iter)
+
+
+            for minibatch in range(num_iter): 
+
+                inputs, labels, _ = data[0]
+                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                labels = torch.Tensor(labels).to(self.device).long()
+                
+                # update memory buffer in the last epoch (to ensure that the memory buffer
+                # is not updated multiple times)
+                if epoch == num_epochs - 1:
+                    memory_buffer.add_data(inputs, labels)
+
+                samples_inputs, samples_labels = memory_buffer.get_data()
+                # samples_inputs = samples_inputs.to(self.device)
+                # samples_labels = samples_labels.to(self.device).long()
+                samples_labels = samples_labels.long()
+                # samples_labels = torch.Tensor(samples_labels).to(self.device).long()
+                inputs = torch.cat((inputs, samples_inputs), 0) # torch.Size([256, 1, 49, 10])
+                labels = torch.cat((labels, samples_labels), 0) # torch.Size([256])
+                
+                # Zero out the parameter gradients after each mini-batch
+                self.optimizer.zero_grad()
+
+                # Train, compute loss, update optimizer
+                model = model.to(self.device)
+                outputs = F.softmax(model(inputs), dim=1)
+                loss = self.criterion(outputs, labels)
+                loss.backward()
+                self.optimizer.step()
+
+                # Compute training statistics
+                running_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+                # Print information every 50 minibatches
+                if minibatch % 50 == 0: 
+                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
+                    if self.args.wandb:
+                        wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
+                    running_loss = 0.0
+                
+                
+
+
+            
+
+            tmp_acc = self.validate(model, 'validation', task_id = task_id)
+
+        
+        # model_name = self.args.method + '_' + self.args.task + '_model.pth'
+        # PATH = './models/' + model_name
+        # torch.save(model.state_dict(), PATH)
+
+
+        return model, memory_buffer
+
+
 
 
     # def adapt (self, model, noise):
