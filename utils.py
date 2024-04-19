@@ -80,31 +80,47 @@ def conf_matrix(labels, predicted, training_parameters):
     sn.heatmap(df_cm, annot=True)
     plt.show()
 
+# def task_average_forgetting(acc_matrix):
+#     # Number of tasks (not including the final model evaluation)
+#     num_tasks = acc_matrix.shape[0]
+
+#     # Initialize the forgetting list
+#     forgetting = []
+
+#     # Calculate the maximum accuracy for each task from stages before the last and the last accuracy
+#     for task_index in range(num_tasks):
+#         # Filter out zero values but include the last value in case it's the only record
+#         filtered_acc = acc_matrix[task_index][acc_matrix[task_index] != 0]
+#         if len(filtered_acc) > 1:
+#             max_acc_before_last = np.max(filtered_acc[:-1])  # Maximum before the last training
+#             last_acc = filtered_acc[-1]  # The last training result
+#             forgetting.append(max_acc_before_last - last_acc)
+#         elif len(filtered_acc) == 1:  # Only one non-zero entry, no forgetting possible
+#             forgetting.append(0)
+
+#     # Calculate average forgetting
+#     if len(forgetting) > 0:
+#         average_forgetting = np.mean(forgetting)
+#     else:
+#         average_forgetting = 0  # In case all entries were zero and filtered out
+
+#     return average_forgetting / 100
 def task_average_forgetting(acc_matrix):
-    # Number of tasks (not including the final model evaluation)
-    num_tasks = acc_matrix.shape[0]
-
-    # Initialize the forgetting list
-    forgetting = []
-
-    # Calculate the maximum accuracy for each task from stages before the last and the last accuracy
-    for task_index in range(num_tasks):
-        # Filter out zero values but include the last value in case it's the only record
-        filtered_acc = acc_matrix[task_index][acc_matrix[task_index] != 0]
-        if len(filtered_acc) > 1:
-            max_acc_before_last = np.max(filtered_acc[:-1])  # Maximum before the last training
-            last_acc = filtered_acc[-1]  # The last training result
-            forgetting.append(max_acc_before_last - last_acc)
-        elif len(filtered_acc) == 1:  # Only one non-zero entry, no forgetting possible
-            forgetting.append(0)
-
-    # Calculate average forgetting
-    if len(forgetting) > 0:
-        average_forgetting = np.mean(forgetting)
-    else:
-        average_forgetting = 0  # In case all entries were zero and filtered out
-
-    return average_forgetting / 100
+    # Number of tasks
+    t = acc_matrix.shape[0]
+    
+    # Initialize an array to store the maximum forgetting for each task (except the last one)
+    forgetting = np.zeros(t - 1)
+    
+    # Calculate forgetting for each task (except the last one)
+    for i in range(t - 1):
+        historical_max = np.max(acc_matrix[i, :i+1])  # Highest accuracy observed for task i during its training phase
+        final_acc = acc_matrix[i, t-1]                # Final accuracy of task i after all tasks have been trained
+        forgetting[i] = historical_max - final_acc    # Forgetting is the reduction from historical maximum to final accuracy
+    
+    # Compute average forgetting
+    average_forgetting = np.mean(forgetting)/100
+    return average_forgetting
 
 
 def per_noise_accuracy(labels, predicted, noises):
@@ -366,6 +382,12 @@ class Buffer_NRS:
         num_labels = self.buffer['labels'].size(0)
         assert num_examples == num_labels
         return num_examples
+
+    def reset_num_seen_examples(self):
+        """
+        Reset the number of seen examples.
+        """
+        self.num_seen_examples = 0
 
     def is_empty(self):
         """

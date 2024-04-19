@@ -265,53 +265,68 @@ class AudioProcessor(object):
 
       elif task_id == 'cil_joint': # keep all the words
         pass
+      
+      elif task_id == 'cil_task_0_disjoint':
+        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      
+      elif task_id == 'cil_task_1_disjoint':
+        labels = set(['follow','forward','four','happy','house','learn'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif task_id == 'cil_task_2_disjoint':
+        labels = set(['marvin','nine','one','seven','sheila','six'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif task_id == 'cil_task_3_disjoint':
+        labels = set(['three','tree','two','visual','wow','zero'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
       else:
         pass
-      
-
 
     elif mode == 'validation' or mode == 'testing':
         
-        if task_id == 'cil_task_0': # 1 to 17
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      if task_id == 'cil_task_0': # 1 to 17
+        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-        elif task_id == 'cil_task_1': # 1 to 23
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                        'follow','forward','four','happy','house','learn'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      elif task_id == 'cil_task_1': # 1 to 23
+        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+                      'follow','forward','four','happy','house','learn'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-        elif task_id == 'cil_task_2': # 1 to 29
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                        'follow','forward','four','happy','house','learn',
-                        'marvin','nine','one','seven','sheila','six'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      elif task_id == 'cil_task_2': # 1 to 29
+        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+                      'follow','forward','four','happy','house','learn',
+                      'marvin','nine','one','seven','sheila','six'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-        elif task_id == 'cil_task_3' or task_id == 'cil_joint': # 1 to 35
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                        'follow','forward','four','happy','house','learn',
-                        'marvin','nine','one','seven','sheila','six',
-                        'three','tree','two','visual','wow','zero'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      elif task_id == 'cil_task_3' or task_id == 'cil_joint': # 1 to 35
+        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+                      'follow','forward','four','happy','house','learn',
+                      'marvin','nine','one','seven','sheila','six',
+                      'three','tree','two','visual','wow','zero'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      
+      elif task_id == 'cil_task_0_disjoint':
+        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      
+      elif task_id == 'cil_task_1_disjoint':
+        labels = set(['follow','forward','four','happy','house','learn'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif task_id == 'cil_task_2_disjoint':
+        labels = set(['marvin','nine','one','seven','sheila','six'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+      elif task_id == 'cil_task_3_disjoint':
+        labels = set(['three','tree','two','visual','wow','zero'])
+        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
         
-        elif task_id == 'cil_task_0_disjoint':
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-        
-        elif task_id == 'cil_task_1_disjoint':
-          labels = set(['follow','forward','four','happy','house','learn'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_2_disjoint':
-          labels = set(['marvin','nine','one','seven','sheila','six'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_3_disjoint':
-          labels = set(['three','tree','two','visual','wow','zero'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-          
-        else:
-          pass
+      else:
+        pass
 
     # print('Candidates:', candidates)
 

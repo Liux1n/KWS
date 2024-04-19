@@ -56,6 +56,7 @@ python main.py
 
 ## Contributor
 Cristian Cioflan, ETH Zurich, [cioflanc@iis.ee.ethz.ch](cioflanc@iis.ee.ethz.ch)
+Liuxin Qing, ETH Zurich, [liuqing@student.ethz.ch](liuqing@student.ethz.ch)
 
 
 ## License

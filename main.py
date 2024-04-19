@@ -14,7 +14,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # ==============================================================================
 #
-# Author: Cristian Cioflan, ETH (cioflanc@iis.ee.ethz.ch)
+# Author: Cristian Cioflan, ETH (cioflanc@iis.ee.ethz.ch),
+#         Liuxin Qing, ETH(liuqing@student.ethz.ch)
 
 import copy
 import torch
@@ -56,7 +57,8 @@ parser.add_argument('--mode',
                   help='training mode (default: cil)')
 
 parser.add_argument('--method', 
-                  choices=['source_only', 'finetune', 'joint', 'ER_NRS', 'ECBRS', 'custum','base_pretrain', 'joint_pretrain'
+                  choices=['source_only', 'finetune', 'joint', 'ER_NRS', 'ECBRS', 'custum',
+                           'base_pretrain', 'joint_pretrain', 'final_test'
                            ], 
                   default='base_pretrain',
                   required=True,
@@ -69,6 +71,7 @@ parser.add_argument('--wandb', action='store_true', help="Enable wandb log.")
 parser.add_argument('--pretrain', action='store_true', help="Enable pretrain.")
 parser.add_argument('--background_volume', type=int, help="Set background volume.")
 parser.add_argument('--early_stop', action='store_true', help="Enable wandb log.")
+parser.add_argument('--forgetting', action='store_true', help="Enable wandb log.")
 args = parser.parse_args()
 
 time_str = time.strftime("%Y%m%d-%H%M%S")
@@ -90,19 +93,25 @@ if args.debug:
 # model_name = 'base_dil_task_0_model.pth'
 # model_name = 'base_dil_joint_model.pth'
 # model_name = 'base_12_dil_task_0_model.pth'
-# fine-tune models:
-# model_name = 'finetune_dil_task_1_model.pth'
-# random ER models:
-# model_name = 'ER_random_dil_task_1_model.pth'
-# model_name = 'ER_random_dil_task_2_model.pth'
 
-# DIL vol=9 models:
-# model_name = 'base20240414-231812dil_task_0_model.pth'
+# DIL joint pretrain
+# model_name = 'dil_joint_pretrain_20240419-03430430.pth'
+
+# DIL base pretrain
+# model_name = 'dil_base_pretrain.pth'
 
 # CIL models:
-model_name = 'base_cil_task_0_model.pth'
-# model_name = 'ER_random_cil_task_1_model.pth'
-# model_name = 'ER_random_cil_task_2_model.pth'
+# model_name = 'base_cil_task_0_model.pth'
+
+# CIL joint
+# model_name = 'cil_joint_pretrain_20240418-23171014.pth'
+
+# CIL base pretrain
+model_name = 'cil_base_pretrain_20240419-02554315.pth'
+
+# CIL er_nrs
+
+
 # model_name = 'joint_12_cil_joint_model.pth'
 
 model_path = './models/' + model_name 
@@ -231,20 +240,21 @@ if args.mode == 'dil':
       if args.wandb:
           wandb.log({f'ACC_task_{i}': acc_task})
       
-      print('Testing on Disjoint Tasks...')
-      task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
-      for j in range(i+1): 
-        training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
-        # Dataset generation
-        audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
-        acc_matrix[i,j] = acc_task
-        del audio_processor
-        del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
+        task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
 
     print('acc_matrix:', acc_matrix)
 
@@ -297,28 +307,34 @@ if args.mode == 'dil':
       print(f'Test Accuracy of Task {i}: ', acc_task)
       if args.wandb:
           wandb.log({f'ACC_task_{i}': acc_task})
-      print('Testing on Disjoint Tasks...')
-      task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
-      for j in range(i+1): 
-        training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
-        # Dataset generation
-        audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
-        acc_matrix[i,j] = acc_task
+
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
+        task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      else:
         del audio_processor
         del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
 
-    print('acc_matrix:', acc_matrix)
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-        wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+          wandb.log({'Task-average Forgetting': average_forgetting})
 
   
   elif args.method == 'finetune':
@@ -360,31 +376,35 @@ if args.mode == 'dil':
         if args.wandb:
             wandb.log({f'ACC_{task_id}': acc_task})
 
-      print('Testing on Disjoint Tasks...')
-      del audio_processor
-      del training_environment
-      task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
-      for j in range(i+1): 
-        training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
-        # Dataset generation
-        audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
-        acc_matrix[i,j] = acc_task
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
         del audio_processor
         del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+        task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      else:
+        del audio_processor
+        del training_environment
 
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    print('acc_matrix:', acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
-
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-      wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
 
     # Save the model
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -441,35 +461,42 @@ if args.mode == 'dil':
         training_environment = Train(audio_processor, training_parameters, model, device, args, config)
         print(f'Conintual Training on {task_id}...')
         model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
+        # reset num_seen_examples in memory buffer
+        memory_buffer.reset_num_seen_examples()
         acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
         print(f'Test Accuracy of {task_id}: ', acc_task)
         if args.wandb:
             wandb.log({f'ACC_{task_id}': acc_task})
-      print('Testing on Disjoint Tasks...')
-      del audio_processor
-      del training_environment
-      task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
-      for j in range(i+1): 
-        training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
-        # Dataset generation
-        audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
-        acc_matrix[i,j] = acc_task
+      
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
         del audio_processor
         del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+        task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      else:
+        del audio_processor
+        del training_environment
 
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    print('acc_matrix:', acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
-
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-      wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
 
     # Save the model
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -511,7 +538,9 @@ elif args.mode == 'cil':
     
     training_environment.train(model,task_id='cil_task_0')
     print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
-  
+    acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id='cil_task_0', statistics=False)
+    print(f'Test Accuracy: ', acc_task)
+
 
   elif args.method == 'joint_pretrain':
     print('Joint-Training model...')
@@ -580,29 +609,30 @@ elif args.mode == 'cil':
       if args.wandb:
           wandb.log({f'ACC_task_{i}': acc_task})
 
-      print('Testing on Disjoint Tasks...')
-      task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
-      for j in range(i+1): 
-        # training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
-        # # Dataset generation
-        # audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        # training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
-        acc_matrix[i,j] = acc_task
-        # del audio_processor
-        # del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
+        task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
+        for j in range(i+1): 
+          # training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
+          # # Dataset generation
+          # audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          # training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
+          acc_matrix[i,j] = acc_task
+          # del audio_processor
+          # del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
     
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    print('acc_matrix:', acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
-
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-      wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
 
 
   elif args.method == 'source_only':
@@ -652,22 +682,22 @@ elif args.mode == 'cil':
       print(f'Test Accuracy of Task {i}: ', acc_task)
       if args.wandb:
           wandb.log({f'ACC_task_{i}': acc_task})
-      
-      print('Testing on Disjoint Tasks...')
-      task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
-      for j in range(i+1):
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
-        acc_matrix[i,j] = acc_task
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
+        task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
+        for j in range(i+1):
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
+          acc_matrix[i,j] = acc_task
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    print('acc_matrix:', acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
-
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-      wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
         
 
   elif args.method == 'finetune':
@@ -725,31 +755,35 @@ elif args.mode == 'cil':
             wandb.log({f'ACC_{task_id}': acc_task})
         n_classes += new_classes_per_task
 
-      print('Testing on Disjoint Tasks...')
-      del audio_processor
-      del training_environment
-      task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
-      for j in range(i+1): 
-        training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)
-        # Dataset generation
-        audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
-        acc_matrix[i,j] = acc_task
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
         del audio_processor
         del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+        task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      else:
+        del audio_processor
+        del training_environment
     
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    print('acc_matrix:', acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
-
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-      wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
       
     # Save the model
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -762,10 +796,7 @@ elif args.mode == 'cil':
   elif args.method == 'ER_NRS':
 
     print('Start ER_NRS')
-    
-    
 
-    
     acc_matrix = np.zeros((4,4)) # acc_matrix[i,j] = acc after training task i on task j
     acc_done = 0
 
@@ -787,6 +818,8 @@ elif args.mode == 'cil':
       # Removing stored inputs and activations
       remove_txt()
       if i == 0:
+        # initialize memory buffer
+        memory_buffer = Buffer_NRS(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
         # prepare data
         data = dataset.AudioGenerator('training', audio_processor, training_parameters, 'cil_task_0', task = None)
         for minibatch in range(int(config['memory_buffer_size']/128)):
@@ -802,11 +835,13 @@ elif args.mode == 'cil':
         model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
         print('Model loaded from ', model_path)
         summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
         acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
         print(f'Test Accuracy of {task_id}: ', acc_task)
         if args.wandb:
             wandb.log({f'ACC_{task_id}': acc_task})
       else:
+        
         fc_new= torch.nn.Linear(64, n_classes + new_classes_per_task) # 19 + 6 = 25, 19 + 12 = 31, 19 + 18 = 37
         if model.fc1 is not None:
             weight = copy.deepcopy(model.fc1.weight.data)
@@ -820,37 +855,43 @@ elif args.mode == 'cil':
         training_environment = Train(audio_processor, training_parameters, model, device, args, config)
         print(f'Conintual Training on {task_id}...')
         model, memory_buffer = training_environment.ER_NRS(model, memory_buffer, task_id)
+        # reset num_seen_examples in memory buffer
+        memory_buffer.reset_num_seen_examples()
         acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id, statistics=False)
         print(f'Test Accuracy of {task_id}: ', acc_task)
         if args.wandb:
             wandb.log({f'ACC_{task_id}': acc_task})
         n_classes += new_classes_per_task
       
-      print('Testing on Disjoint Tasks...')
-      del audio_processor
-      del training_environment
-      task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
-      for j in range(i+1): 
-        training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)
-        # Dataset generation
-        audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
-        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
-        # print (f"Testing Accuracy on {task_id_disjoint}...")
-        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
-        acc_matrix[i,j] = acc_task
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
         del audio_processor
         del training_environment
-        acc_done += 1
-        print(f'Finished Testing for Acc Matrix {acc_done}/10')
+        task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[j], statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      else:
+        del audio_processor
+        del training_environment
     
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
 
-    print('acc_matrix:', acc_matrix)
+      average_forgetting = task_average_forgetting(acc_matrix)
 
-    average_forgetting = task_average_forgetting(acc_matrix)
-
-    print("Task-average Forgetting:", average_forgetting)
-    if args.wandb:
-      wandb.log({'Task-average Forgetting': average_forgetting})
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
 
       
 
@@ -860,5 +901,46 @@ elif args.mode == 'cil':
     PATH = './models/' + model_name
     torch.save(model.state_dict(), PATH)
     print('Model saved at ', PATH)
+
+  elif args.method == 'final_test':
+    print('Using final_test model. No continual training needed.')
+    training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=None)  # To be parametrized
+
+    # Dataset generation
+    audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+
+    train_size = audio_processor.get_size('training')
+    valid_size = audio_processor.get_size('validation')
+    test_size = audio_processor.get_size('testing')
+    print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+    # Removing stored inputs and activations
+    remove_txt()
+    # Loaded model has n_classes = 35 + 2 = 37
+    n_classes = config['n_classes'] + 2 # 35 + 2
+    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    model.to(device)
+    summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+    dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+    # count_ops(model, dummy_input)
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+    training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+
+    print('Testing on Disjoint Tasks...')
+    # task_id_disjoint = ['cil_task_0_disjoint','cil_task_1_disjoint', 'cil_task_2_disjoint', 'cil_task_3_disjoint']
+    task_id_disjoint = ['cil_task_0','cil_task_1', 'cil_task_2', 'cil_task_3']
+    for i in range(4): 
+      # print('Testing on ', task_id_disjoint[i])
+      acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=task_id_disjoint[i], statistics=False)
+      print(f'Test Accuracy of {task_id_disjoint[i]}: ', acc_task)
+    # if args.forgetting:
+    #   print('acc_matrix:', acc_matrix)
+
+    #   average_forgetting = task_average_forgetting(acc_matrix)
+
+    #   print("Task-average Forgetting:", average_forgetting)
+    #   if args.wandb:
+    #     wandb.log({'Task-average Forgetting': average_forgetting})
+        
 
 

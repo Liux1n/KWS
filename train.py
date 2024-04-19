@@ -14,7 +14,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # ==============================================================================
 #
-# Author: Cristian Cioflan, ETH (cioflanc@iis.ee.ethz.ch)
+# Author: Cristian Cioflan, ETH (cioflanc@iis.ee.ethz.ch),
+#         Liuxin Qing, ETH(liuqing@student.ethz.ch)
 
 import time
 import dataset
@@ -91,8 +92,18 @@ class Train():
                     per_noise_accuracy(labels, predicted, noises)
 
             else:
-
-                for minibatch in range(len(data)):
+                # print(mode)
+                num_iter = len(data)
+                if task_id == 'cil_task_0':
+                    num_iter = int((17/35)*num_iter)
+                elif task_id == 'cil_task_1':
+                    num_iter = int((23/35)*num_iter)
+                elif task_id == 'cil_task_2':
+                    num_iter = int((29/35)*num_iter)
+                elif task_id == 'cil_task_3':
+                    num_iter = int((35/35)*num_iter)
+                # print(num_iter)
+                for minibatch in range(num_iter):
                     inputs, labels, noises = data[0]
                     inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
                     labels = torch.Tensor(labels).long().to(self.device)
@@ -119,7 +130,7 @@ class Train():
                     # calculate F1 score
 
                     if minibatch % 20 == 0: 
-                        print('[%3d / %3d] accuracy: %.3f' % (minibatch + 1, len(data),  100 * correct / total))
+                        print('[%3d / %3d] accuracy: %.3f' % (minibatch + 1, num_iter,  100 * correct / total))
                         
                         running_loss = 0.0
 
@@ -191,7 +202,7 @@ class Train():
                         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                     running_loss = 0.0
 
-            tmp_acc = self.validate(model, 'validation')
+            tmp_acc = self.validate(model, 'validation', task_id = task_id)
             if self.args.early_stop:
                 # Save best performing network
                 if (tmp_acc > best_acc):
@@ -254,8 +265,8 @@ class Train():
             elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
                 num_iter = int((6/35)*num_iter)
             
-            elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
-                num_iter = int((3/18)*num_iter)
+            # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
+            #     num_iter = int((3/18)*num_iter)
 
             num_seen_samples = 0  # This counts all samples processed so far
 
@@ -295,7 +306,7 @@ class Train():
                         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                     running_loss = 0.0
 
-            tmp_acc = self.validate(model, 'validation')
+            tmp_acc = self.validate(model, 'validation', task_id = task_id)
 
         
         # model_name = self.args.method + '_' + self.args.task + '_model.pth'
@@ -336,8 +347,8 @@ class Train():
             elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
                 num_iter = int((6/35)*num_iter)
 
-            elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
-                num_iter = int((3/18)*num_iter)
+            # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
+            #     num_iter = int((3/18)*num_iter)
 
             for minibatch in range(num_iter): 
             
@@ -369,7 +380,7 @@ class Train():
                         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
                     running_loss = 0.0
 
-            tmp_acc = self.validate(model, 'validation')
+            tmp_acc = self.validate(model, 'validation', task_id = task_id)
 
         return model
 
