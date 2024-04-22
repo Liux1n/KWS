@@ -229,7 +229,8 @@ elif args.mode == 'cil':
       if i == 0:
         # initialize memory buffer
         # memory_buffer = Buffer_CB(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
-        memory_buffer = Buffer_CB_fast(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
+        # memory_buffer = Buffer_CB_fast(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
+        memory_buffer = Buffer_NRS(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
         # prepare data
         data = dataset.AudioGenerator('training', audio_processor, training_parameters, 'cil_task_0', task = None)
         # for minibatch in range(int(config['memory_buffer_size']/128)):
@@ -243,7 +244,7 @@ elif args.mode == 'cil':
             memory_buffer.add_data(inputs_mb, labels_mb)
             end_time = time.time()
             # print("Time for adding data: ", end_time - start_time)
-            if minibatch % 100 == 0:
+            if minibatch % 50 == 0:
                 cls_count = memory_buffer.get_class_count()
                 print("Class count: ", cls_count)
                 print("Time for adding data: ", end_time - start_time)

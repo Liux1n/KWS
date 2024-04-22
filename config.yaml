@@ -7,7 +7,7 @@ noise_dir: '/usr/scratch/sassauna2/sem24f39/DEMAND/dataset_48k' # linux
 noise_dataset: 'demand'
 # hyperparameters
 epochs: 200
-epochs_CL: 16
+epochs_CL: 1
 n_classes: 35
 # n_classes: 12
 batch_size: 128

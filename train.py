@@ -394,11 +394,11 @@ class Train():
         return model, memory_buffer
 
    
-    def ER_CB(self, 
+    def ER_LACB(self, 
                 model, 
                 memory_buffer, 
                 task_id = None,):
-
+    
         # memory_buffer = memory_buffer.to(self.device)
         memory_buffer_size = self.config['memory_buffer_size']
         # Train model
@@ -434,13 +434,12 @@ class Train():
             for minibatch in range(num_iter): 
 
                 inputs, labels, _ = data[0]
-                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device) # 
                 labels = torch.Tensor(labels).to(self.device).long()
                 
                 # update memory buffer in the last epoch (to ensure that the memory buffer
                 # is not updated multiple times)
-                # if epoch == num_epochs - 1:
-                if epoch == 0:
+                if epoch == num_epochs - 1:
                     memory_buffer.add_data(inputs, labels)
 
                 samples_inputs, samples_labels = memory_buffer.get_data()
@@ -457,6 +456,7 @@ class Train():
                 # Train, compute loss, update optimizer
                 model = model.to(self.device)
                 outputs = F.softmax(model(inputs), dim=1)
+                print(outputs[0])
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
@@ -485,7 +485,6 @@ class Train():
         # model_name = self.args.method + '_' + self.args.task + '_model.pth'
         # PATH = './models/' + model_name
         # torch.save(model.state_dict(), PATH)
-
 
         return model, memory_buffer
 
