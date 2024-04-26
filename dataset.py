@@ -454,10 +454,21 @@ class AudioProcessor(object):
         pad_tuple=tuple(data_augmentation_parameters['time_shift_padding'][0])
         padded_foreground = torch.nn.ConstantPad1d(pad_tuple,0)(scaled_foreground)
         sliced_foreground = padded_foreground[data_augmentation_parameters['time_shift_offset'][0]:data_augmentation_parameters['time_shift_offset'][0]+self.data_processing_parameters['desired_samples']]
-        
+        # print('Sliced foreground:', sliced_foreground.shape)
+        # get the power of sliced foreground
+        power_foreground = torch.sum(torch.pow(sliced_foreground,2))
         # Mix in background noise
         background_mul = torch.mul(torch.Tensor(data_augmentation_parameters['background_noise'][:,0]),data_augmentation_parameters['background_volume']) 
-        background_add = torch.add(background_mul, sliced_foreground)
+        power_background = torch.sum(torch.pow(background_mul,2))
+
+        beta = torch.sqrt(power_foreground / power_background)
+        # print(f"Beta: ", beta)
+        background_mul = background_mul * beta
+
+        if use_background:
+          background_add = torch.add(background_mul, sliced_foreground)
+        else:
+          background_add = sliced_foreground
 
         # Compute MFCCs - PyTorch
         melkwargs={ 'n_fft':1024, 'win_length':self.data_processing_parameters['window_size_samples'], 'hop_length':self.data_processing_parameters['window_stride_samples'],

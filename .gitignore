@@ -1,6 +1,7 @@
 # Python
 *.pyc
 __pycache__/
+methods/__pycache__/
 venv/
 *.egg-info/
 dist/
@@ -26,6 +27,8 @@ build/
 
 #models
 models/
+new_models/
+methods/
 buffer/
 # wandb
 wandb/
