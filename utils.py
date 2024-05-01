@@ -20,7 +20,7 @@
 import os
 import random
 from sklearn.metrics import confusion_matrix
-
+import torchaudio.transforms as T
 import numpy as np
 import seaborn as sn
 import pandas as pd
@@ -82,15 +82,67 @@ def conf_matrix(labels, predicted, training_parameters):
     plt.show()
 
 
+
+# def task_average_forgetting(acc_matrix):
+
+#     acc_final = acc_matrix[-1,:]
+#     acc_best = np.max(acc_matrix, axis = 0)
+#     forgetting = acc_best - acc_final
+#     average_forgetting = np.mean(forgetting)
+
+#     return average_forgetting
+
 def task_average_forgetting(acc_matrix):
 
-    acc_final = acc_matrix[-1,:]
-    acc_best = np.max(acc_matrix, axis = 0)
+    acc_final = acc_matrix[-1,:-1]
+    acc_best = np.max(acc_matrix[:,:-1], axis = 0)
     forgetting = acc_best - acc_final
-    average_forgetting = np.mean(forgetting)/100
+    average_forgetting = np.mean(forgetting)
 
     return average_forgetting
 
+
+class RandomAugmentor:
+    def __init__(self, device):
+        self.device = device
+        self.augmentations = [
+            "clipping_distortion",
+            "time_mask",
+            "shift",
+            "frequency_mask"
+        ]
+
+    def apply(self, examples):
+        # Choose a random augmentation
+        augmentation = random.choice(self.augmentations)
+
+        # Move tensor to the specified device
+        examples = examples.to(self.device)
+
+        if augmentation == "clipping_distortion":
+            # Apply clipping distortion
+            max_amp = examples.abs().max()
+            examples = torch.clamp(examples, min=-max_amp * 0.5, max=max_amp * 0.5)
+        
+        elif augmentation == "time_mask":
+            # Apply time mask
+            mask_param = random.randint(1, 10)
+            time_mask = T.TimeMasking(time_mask_param=mask_param)
+            examples = time_mask(examples)
+        
+        elif augmentation == "shift":
+            # Shift the samples
+            shift_amount = random.randint(-5, 5)
+            examples = torch.roll(examples, shifts=shift_amount, dims=-1)
+        
+        elif augmentation == "frequency_mask":
+            # Apply frequency mask
+            freq_mask_param = random.randint(1, 5)
+            freq_mask = T.FrequencyMasking(freq_mask_param=freq_mask_param)
+            examples = freq_mask(examples)
+        
+        return examples
+    
 
 def per_noise_accuracy(labels, predicted, noises):
 
@@ -107,10 +159,10 @@ def per_noise_accuracy(labels, predicted, noises):
                     correct = correct + 1
         print('Noise number %3d - accuracy: %.3f' % (noise,  100 * correct / total))   
 
+
 def load_config(config_path):
     with open(config_path, "r") as file:
         return yaml.safe_load(file)
-
 
 
 def parameter_generation(args=None, config=None, task_id=None):
@@ -157,6 +209,10 @@ def parameter_generation(args=None, config=None, task_id=None):
     'background_volume':config['background_volume'],
     'debug':args.debug,
     'wandb':args.wandb,
+    'seed': config['seed'],
+    'volume_ratio': config['volume_ratio'],
+    'snr': config['snr'],
+    'mode': args.mode,
     }
 
     if training_parameters['noise_dataset'] == 'demand':
@@ -251,7 +307,11 @@ def parameter_generation(args=None, config=None, task_id=None):
     # target_words='yes,no,up,down,left,right,on,off,stop,go,'  # GSCv2 - 10 words
                  #2  ,3 ,4 ,5   ,6   ,7    ,8 ,9  ,10  ,11
     target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
-
+    # if args.mode == 'cil':
+    #     target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
+    # elif args.mode == 'dil':
+    #     # 'yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'
+    #     target_words = 'yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,'
 
     wanted_words=(target_words).split(',')
     wanted_words.pop()
@@ -276,6 +336,83 @@ def reservoir(num_seen_examples: int, buffer_size: int) -> int:
         return rand
     else:
         return -1
+
+
+class MiniBatchKMeansTorch:
+    def __init__(self, n_clusters=3, n_features=490, max_iter=100, batch_size=10, device='cuda'):
+        self.device = torch.device(device)
+        self.n_clusters = n_clusters
+        self.n_features = n_features
+        self.centroids = torch.rand(n_clusters, n_features, device=self.device)
+        self.max_iter = max_iter
+        self.batch_size = batch_size
+        self.labels = None
+
+    def fit(self, dataset):
+        dataset = dataset.clone().detach().to(self.device)
+        self.labels = torch.empty(dataset.size(0), dtype=torch.long, device=self.device)
+        for _ in range(self.max_iter):
+            minibatch_indices = torch.randint(0, dataset.size(0), (self.batch_size,), device=self.device)
+            minibatch = dataset[minibatch_indices]
+            distances = torch.cdist(minibatch, self.centroids, p=2)
+            labels = torch.argmin(distances, dim=1)
+            self.labels[minibatch_indices] = labels
+            for i in range(self.n_clusters):
+                cluster_points = minibatch[labels == i]
+                if cluster_points.size(0) > 0:
+                    self.centroids[i] = cluster_points.mean(dim=0)
+
+    def partial_fit(self, dataset, new_data):
+        # First ensure that labels are aligned with the dataset
+        if self.labels is None or len(self.labels) != len(dataset):
+            # Reinitialize labels if they are not aligned
+            self.labels = torch.full((len(dataset),), -1, dtype=torch.long, device=dataset.device)
+
+        # Proceed with existing logic
+        distances_to_centroids = torch.cdist(new_data, self.centroids, p=2)
+        closest_cluster = torch.argmin(distances_to_centroids, dim=1).item()
+        indices_in_cluster = (self.labels == closest_cluster).nonzero(as_tuple=True)[0]
+        
+        if indices_in_cluster.size(0) > 0:
+            random_idx_to_replace = indices_in_cluster[torch.randint(0, indices_in_cluster.size(0), (1,))].item()
+            dataset[random_idx_to_replace] = new_data.squeeze()
+            # print(f"Replaced index: {random_idx_to_replace} in cluster {closest_cluster}")
+            affected_data = dataset[self.labels == closest_cluster]
+            self.centroids[closest_cluster] = affected_data.mean(dim=0)
+
+        return dataset
+
+    def remove_sample_from_largest_cluster(self, dataset):
+        # if self.labels is None or len(self.labels) != len(dataset):
+        #     raise ValueError("Dataset and labels are not aligned or labels are uninitialized.")
+
+        # Count the number of samples in each cluster
+        cluster_counts = torch.bincount(self.labels, minlength=self.n_clusters)
+
+        # Find the cluster with the maximum count
+        largest_cluster = torch.argmax(cluster_counts).item()
+
+        # Get indices of all samples in the largest cluster
+        indices_in_largest_cluster = (self.labels == largest_cluster).nonzero(as_tuple=True)[0]
+
+        if indices_in_largest_cluster.size(0) > 0:
+            # Randomly select one sample to remove
+            idx_to_remove = indices_in_largest_cluster[torch.randint(0, indices_in_largest_cluster.size(0), (1,))].item()
+            # Remove the sample by replacing it with the last sample and shrinking the dataset
+            dataset[idx_to_remove] = dataset[-1]
+            dataset = dataset[:-1]
+            self.labels[idx_to_remove] = self.labels[-1]
+            self.labels = self.labels[:-1]
+
+            # print(f"Removed index: {idx_to_remove} from cluster {largest_cluster}, New dataset size: {len(dataset)}")
+
+        return dataset
+
+    def predict(self, X):
+        X = X.to(self.device)
+        distances = torch.cdist(X, self.centroids, p=2)
+        labels = torch.argmin(distances, dim=1)
+        return labels.cpu().numpy()
 
 
 class Buffer_NRS:
@@ -394,10 +531,6 @@ class Buffer_ECB:
         self.device = device
         self.num_seen_examples = 0
         self.buffer = {}
-        self.attributes = ['examples', 'labels']
-        self.buffer_filled = False
-        # self.buffer['examples'] = torch.empty((self.buffer_size, 1, 49, 10), device=self.device)
-        # self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
 
         self.class_count = {}
 
@@ -443,8 +576,7 @@ class Buffer_ECB:
                     self.class_count[label] += 1
                     self.class_count_total[label] += 1
                 self.num_seen_examples += 1
-                # print('total_class_count:', self.get_total_class_count())
-                # print('class count:', self.get_class_count())
+
             
         else:
             
@@ -486,10 +618,8 @@ class Buffer_ECB:
 
                     largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
 
-                    # order the self.class_count_total.keys() by the value of self.class_count_total
                     sorted_class_count_total = {k: v for k, v in sorted(self.class_count_total.items(), key=lambda item: item[1], reverse=True)}
-                    # # take intersection of largest_classes_with_count_larger_than_one and sorted_class_count_total
-                    # largest_classes_with_count_larger_than_one = list(set(largest_classes_with_count_larger_than_one).intersection(set(sorted_class_count_total)))
+
                     random_class = random.choice(list(largest_classes_with_count_larger_than_one))
 
                     exp_n = np.exp(-self.class_count_total[label])
@@ -501,12 +631,7 @@ class Buffer_ECB:
                         if key in largest_classes_with_count_larger_than_one and self.class_count[key] >= gamma:
                             random_class = key
                             break
-                        
-                    # Randomly select a class from the list
-                    # random_class = random.choice(largest_classes_with_count_larger_than_one) if largest_classes_with_count_larger_than_one else random.choice(list(self.class_count.keys()))
-     
-                    # random_class = random.choice(list(largest_classes))
-                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1) 
+
                     if self.buffer[random_class].size(0) > 1:
                         random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
                         self.class_count[random_class] -= 1
@@ -545,30 +670,15 @@ class Buffer_ECB:
                         pass
             
 
-    def get_data(self):
+    def get_data(self, input_size):
         """
         Get data from the buffer.
         """
-        # self.buffer[label]
-        # label is the key of the dictionary
-        # input is the value of the dictionary
-        # random select 128 examples from the buffer
-        # samples = []
-        # labels = []
-        # for label, input in self.buffer.items():
-        #     if input.size(0) > 1:
-        #         indices = torch.randperm(input.size(0)).to(self.device)[:1]
-        #         samples.append(input[indices])
-        #         labels.append(torch.tensor([label]).to(self.device))
-        #     else:
-        #         samples.append(input)
-        #         labels.append(torch.tensor([label]).to(self.device))
-        # return torch.cat(samples, 0), torch.cat(labels, 0)
 
         samples = []
         labels = []
 
-        for i in range(self.batch_size):
+        for i in range(input_size):
             label = random.choice(list(self.buffer.keys()))
             if self.buffer[label].size(0) >= 1:
                 indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
@@ -608,18 +718,6 @@ class Buffer_ECB:
         """
         return self.class_count
     
-    # def get_class_count(self):
-    #     """
-    #     Get the number of examples for each class in the buffer.
-    #     """
-    #     class_count = {}
-    #     for label in self.buffer['labels']:
-    #         if label.item() in class_count:
-    #             class_count[label.item()] += 1
-    #         else:
-    #             class_count[label.item()] = 1
-    #     return class_count
-
 
 class Buffer_DAECB:
     """
@@ -739,11 +837,6 @@ class Buffer_DAECB:
                             random_class = key
                             break
                         
-                    # Randomly select a class from the list
-                    # random_class = random.choice(largest_classes_with_count_larger_than_one) if largest_classes_with_count_larger_than_one else random.choice(list(self.class_count.keys()))
-     
-                    # random_class = random.choice(list(largest_classes))
-                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1) 
                     if self.buffer[random_class].size(0) > 1:
                         random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
                         self.class_count[random_class] -= 1
@@ -775,18 +868,17 @@ class Buffer_DAECB:
                         # print('examples_in_buffer:', examples_in_buffer.size()) # torch.Size([n, 490])
                         # print('current_example:', current_example.size()) # torch.Size([1, 490])
 
-                        # # Calculate cosine similarity
-                        # cos_similarities = F.cosine_similarity(examples_in_buffer.to(self.device), current_example.to(self.device), dim=-1) # torch.Size([n])
-                        # # normalize the cosine similarities[-1,1]
-                        # cos_similarities = 0.5 * (cos_similarities + 1)
-                        # # randomly select an example from the buffer according to the cosine similarity
-                        # sample_index = torch.multinomial(cos_similarities, 1).item()
+                        # Calculate cosine similarity
+                        cos_similarities = F.cosine_similarity(examples_in_buffer.to(self.device), current_example.to(self.device), dim=-1) # torch.Size([n])
+                        # normalize the cosine similarities[-1,1]
+                        cos_similarities = 0.5 * (cos_similarities + 1)
+                        # randomly select an example from the buffer according to the cosine similarity
+                        sample_index = torch.multinomial(cos_similarities, 1).item()
 
-                        # Calculate Euclidean distance
-                        euclidean_distances = torch.norm(examples_in_buffer.to(self.device) - current_example.to(self.device), dim=-1)
-                        # randomly select an example from the buffer according to the euclidean_distances
-
-                        sample_index = torch.multinomial(euclidean_distances, 1).item()
+                        # # Calculate Euclidean distance
+                        # euclidean_distances = torch.norm(examples_in_buffer.to(self.device) - current_example.to(self.device), dim=-1)
+                        # # randomly select an example from the buffer according to the euclidean_distances
+                        # sample_index = torch.multinomial(euclidean_distances, 1).item()
 
                         # sample_index = torch.argmax(cos_similarities)
                         self.buffer[label][sample_index] = examples[i]
@@ -797,7 +889,7 @@ class Buffer_DAECB:
                         pass
             
 
-    def get_data(self):
+    def get_data(self, input_size):
         """
         Get data from the buffer.
         """
@@ -805,7 +897,471 @@ class Buffer_DAECB:
         samples = []
         labels = []
 
-        for i in range(self.batch_size):
+        for i in range(input_size):
+            label = random.choice(list(self.buffer.keys()))
+            if self.buffer[label].size(0) >= 1:
+                indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
+                samples.append(self.buffer[label][indices])
+                labels.append(torch.tensor([label]).to(self.device))
+            else:
+                samples.append(self.buffer[label])
+                labels.append(torch.tensor([label]).to(self.device))
+
+        return torch.cat(samples, 0), torch.cat(labels, 0)
+        
+    
+    def get_size(self):
+        """
+        Get the number of examples in the buffer.
+        """
+        num_examples = self.buffer['examples'].size(0)
+        num_labels = self.buffer['labels'].size(0)
+        assert num_examples == num_labels
+        return num_examples
+
+    def reset_num_seen_examples(self):
+        """
+        Reset the number of seen examples.
+        """
+        self.num_seen_examples = 0
+
+    def is_empty(self):
+        """
+        Check if the buffer is empty.
+        """
+        return self.num_seen_examples == 0  
+    
+    def get_class_count(self):
+        """
+        Get the number of examples for each class in the buffer.
+        """
+        return self.class_count
+
+
+class Buffer_ECB_custom:
+    """
+    The memory buffer of rehearsal method.
+    """
+    def __init__(self, buffer_size, batch_size, device):
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.device = device
+        self.num_seen_examples = 0
+        self.buffer = {}
+        self.attributes = ['examples', 'labels']
+        self.buffer_filled = False
+        # self.buffer['examples'] = torch.empty((self.buffer_size, 1, 49, 10), device=self.device)
+        # self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
+
+        self.class_count = {}
+
+        self.class_count_total = {}
+
+        self.full_classes = []
+        print("Buffer initialized")
+
+
+    def get_total_class_count(self):
+        """
+        Get the total number of examples for each class in the self.buffer[label]
+        """
+        total_class_count = 0
+        for label in self.buffer.keys():
+            total_class_count += self.buffer[label].size(0)
+        return total_class_count
+
+    
+    def add_data(self, examples, labels):
+        """
+        Add data to the buffer.
+        examples: torch.Size([128, 1, 49, 10])
+        labels: torch.Size([128])
+        """
+
+        input_size = examples.size(0)
+        
+        if self.num_seen_examples < self.buffer_size:
+            
+            for i in range(input_size):
+                label = labels[i].item()
+                if (label not in self.buffer.keys()) or (self.buffer.items() == {}):
+                    # examples: torch.Size([128, 1, 49, 10])
+                    # examples[i]: torch.Size([1, 49, 10])
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    # self.buffer[label].append(examples[i])
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+                else:
+                    # self.buffer[label] = [examples[i]]
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+                    self.class_count[label] += 1
+                    self.class_count_total[label] += 1
+                self.num_seen_examples += 1
+                # print('total_class_count:', self.get_total_class_count())
+                # print('class count:', self.get_class_count())
+            
+        else:
+            
+            
+            for i in range(input_size):
+                largest_class_count = max(self.class_count.values())
+                largest_classes = set(cls for cls, count in self.class_count.items() if count == largest_class_count)
+                # largest_classes_tensor = torch.tensor(list(largest_classes)).to(self.device)
+
+                self.full_classes = list(set(self.full_classes).union(largest_classes))
+                # print('full_classes:', self.full_classes)
+                label = labels[i].item()
+                if label not in self.buffer.keys():
+                    # class is new.
+
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    # randomly select a class from the largest classes
+                    random_class = random.choice(list(largest_classes))
+                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+                    
+                    self.num_seen_examples += 1
+                    # add class count
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+
+                elif (label in self.buffer.keys()) and (label not in self.full_classes):
+       
+                    # class is not in the full classes
+
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+
+                    largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
+
+                    # order the self.class_count_total.keys() by the value of self.class_count_total
+                    sorted_class_count_total = {k: v for k, v in sorted(self.class_count_total.items(), key=lambda item: item[1], reverse=True)}
+                    # # take intersection of largest_classes_with_count_larger_than_one and sorted_class_count_total
+                    # largest_classes_with_count_larger_than_one = list(set(largest_classes_with_count_larger_than_one).intersection(set(sorted_class_count_total)))
+                    random_class = random.choice(list(largest_classes_with_count_larger_than_one))
+
+                    exp_n = np.exp(-self.class_count_total[label])
+                    exp_sum = np.sum([np.exp(-v) for v in sorted_class_count_total.values()])
+                    w = exp_n / exp_sum
+                    gamma = self.buffer_size * w
+                    
+                    for key in sorted_class_count_total:
+                        if key in largest_classes_with_count_larger_than_one and self.class_count[key] >= gamma:
+                            random_class = key
+                            break
+                        
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+        
+                    self.class_count[label] += 1
+                    self.num_seen_examples += 1
+                    self.class_count_total[label] += 1
+   
+                else:
+                    # class is in the full classes
+                    count_label_current = self.class_count[label]
+                    count_label_total = self.class_count_total[label]
+                    # sample a u from uniform[0,1]
+                    u = int(torch.rand(1))
+                    if u <= count_label_current / count_label_total:
+                        
+                        # calculate cosine similarity between the current example and the examples in the buffer
+                        examples_in_buffer = self.buffer[label] # torch.Size([n, 49, 10])
+                        # flatten the examples_in_buffer
+                        examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
+                        current_example = examples[i] # torch.Size([1, 49, 10])
+                        # flatten the current_example
+                        current_example = current_example.view(1, -1)
+                        # print('examples_in_buffer:', examples_in_buffer.size()) # torch.Size([n, 490])
+                        # print('current_example:', current_example.size()) # torch.Size([1, 490])
+
+                        # Calculate cosine similarity
+                        cos_similarities = F.cosine_similarity(examples_in_buffer.to(self.device), current_example.to(self.device), dim=-1) # torch.Size([n])
+                        # normalize the cosine similarities[-1,1]
+                        cos_similarities = 0.5 * (cos_similarities + 1)
+                        # randomly select an example from the buffer according to the cosine similarity
+                        sample_index = torch.multinomial(cos_similarities, 1).item()
+
+                        # # Calculate Euclidean distance
+                        # euclidean_distances = torch.norm(examples_in_buffer.to(self.device) - current_example.to(self.device), dim=-1)
+                        # # randomly select an example from the buffer according to the euclidean_distances
+                        # sample_index = torch.multinomial(euclidean_distances, 1).item()
+
+                        # sample_index = torch.argmax(cos_similarities)
+                        self.buffer[label][sample_index] = examples[i]
+
+                        self.num_seen_examples += 1
+                        self.class_count_total[label] += 1
+                    else:
+                        pass
+            
+
+    def get_data(self, input_size):
+        """
+        Get data from the buffer.
+        """
+
+        samples = []
+        labels = []
+
+        for i in range(input_size):
+            label = random.choice(list(self.buffer.keys()))
+            if self.buffer[label].size(0) >= 1:
+                indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
+                samples.append(self.buffer[label][indices])
+                labels.append(torch.tensor([label]).to(self.device))
+            else:
+                samples.append(self.buffer[label])
+                labels.append(torch.tensor([label]).to(self.device))
+
+        return torch.cat(samples, 0), torch.cat(labels, 0)
+        
+    
+    def get_size(self):
+        """
+        Get the number of examples in the buffer.
+        """
+        num_examples = self.buffer['examples'].size(0)
+        num_labels = self.buffer['labels'].size(0)
+        assert num_examples == num_labels
+        return num_examples
+
+    def reset_num_seen_examples(self):
+        """
+        Reset the number of seen examples.
+        """
+        self.num_seen_examples = 0
+
+    def is_empty(self):
+        """
+        Check if the buffer is empty.
+        """
+        return self.num_seen_examples == 0  
+    
+    def get_class_count(self):
+        """
+        Get the number of examples for each class in the buffer.
+        """
+        return self.class_count
+
+
+
+class Buffer_LossECB:
+    """
+    The memory buffer of rehearsal method.
+    """
+    def __init__(self, buffer_size, batch_size, device):
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.device = device
+        self.num_seen_examples = 0
+        self.buffer = {}
+        self.attributes = ['examples', 'labels']
+        self.buffer_filled = False
+        # self.buffer['examples'] = torch.empty((self.buffer_size, 1, 49, 10), device=self.device)
+        # self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
+
+        self.class_count = {}
+
+        self.class_count_total = {}
+
+        self.full_classes = []
+
+        self.loss_per_class = None
+        print("Buffer initialized")
+
+
+    def get_total_class_count(self):
+        """
+        Get the total number of examples for each class in the self.buffer[label]
+        """
+        total_class_count = 0
+        for label in self.buffer.keys():
+            total_class_count += self.buffer[label].size(0)
+        return total_class_count
+
+    
+    def add_data(self, examples, labels, loss_per_class):
+        """
+        Add data to the buffer.
+        examples: torch.Size([128, 1, 49, 10])
+        labels: torch.Size([128])
+        max_loss_class: the classes and their losses
+        """
+        self.loss_per_class = loss_per_class # dict. keys are the classes and values are the mean losses.
+        input_size = examples.size(0)
+        
+        if self.num_seen_examples < self.buffer_size:
+            
+            for i in range(input_size):
+                label = labels[i].item()
+                if (label not in self.buffer.keys()) or (self.buffer.items() == {}):
+                    # examples: torch.Size([128, 1, 49, 10])
+                    # examples[i]: torch.Size([1, 49, 10])
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    # self.buffer[label].append(examples[i])
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+                else:
+                    # self.buffer[label] = [examples[i]]
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+                    self.class_count[label] += 1
+                    self.class_count_total[label] += 1
+                self.num_seen_examples += 1
+
+            
+        else:
+            
+            
+            for i in range(input_size):
+                largest_class_count = max(self.class_count.values())
+                largest_classes = set(cls for cls, count in self.class_count.items() if count == largest_class_count)
+                # largest_classes_tensor = torch.tensor(list(largest_classes)).to(self.device)
+
+                self.full_classes = list(set(self.full_classes).union(largest_classes))
+                # print('full_classes:', self.full_classes)
+                label = labels[i].item()
+                if label not in self.buffer.keys():
+                    # class is new.
+
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    # randomly select a class from the largest classes
+                    random_class = random.choice(list(largest_classes))
+                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+                    
+                    self.num_seen_examples += 1
+                    # add class count
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+
+                elif (label in self.buffer.keys()) and (label not in self.full_classes):
+       
+                    # class is not in the full classes
+
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+
+                    # ECB:
+                    # largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
+
+                    # # order the self.class_count_total.keys() by the value of self.class_count_total
+                    # sorted_class_count_total = {k: v for k, v in sorted(self.class_count_total.items(), key=lambda item: item[1], reverse=True)}
+                    # # # take intersection of largest_classes_with_count_larger_than_one and sorted_class_count_total
+                    # # largest_classes_with_count_larger_than_one = list(set(largest_classes_with_count_larger_than_one).intersection(set(sorted_class_count_total)))
+                    # random_class = random.choice(list(largest_classes_with_count_larger_than_one))
+
+                    # exp_n = np.exp(-self.class_count_total[label])
+                    # exp_sum = np.sum([np.exp(-v) for v in sorted_class_count_total.values()])
+                    # w = exp_n / exp_sum
+                    # gamma = self.buffer_size * w
+                    
+                    # for key in sorted_class_count_total:
+                    #     if key in largest_classes_with_count_larger_than_one and self.class_count[key] >= gamma:
+                    #         random_class = key
+                    #         break
+
+                    # LossECB:
+                    # largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
+                    # # randomly select a class from largest_classes_with_count_larger_than_one according to the loss
+                    # random_class = torch.multinomial(torch.tensor([1/self.loss_per_class[class_label] for class_label in largest_classes_with_count_larger_than_one]), 1).item()
+                    # random_class = largest_classes_with_count_larger_than_one[random_class]
+                    # print('random_class:', random_class)
+                    # Filter out classes that are not in self.loss_per_class
+                    largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
+                    valid_classes = [class_label for class_label in largest_classes_with_count_larger_than_one if class_label in self.loss_per_class]
+
+                    # Calculate the probabilities
+                    probabilities = [1/self.loss_per_class[class_label] for class_label in valid_classes]
+
+                    # Check if probabilities list is empty
+                    if not probabilities:
+                        raise ValueError("No valid classes to select from")
+
+                    # Select a random class
+                    random_class = torch.multinomial(torch.tensor(probabilities), 1).item()
+                    random_class = valid_classes[random_class]
+                    
+                        
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+        
+                    self.class_count[label] += 1
+                    self.num_seen_examples += 1
+                    self.class_count_total[label] += 1
+   
+                else:
+                    # class is in the full classes
+                    count_label_current = self.class_count[label]
+                    count_label_total = self.class_count_total[label]
+                    # sample a u from uniform[0,1]
+                    u = int(torch.rand(1))
+                    if u <= count_label_current / count_label_total:
+                        
+                        # calculate cosine similarity between the current example and the examples in the buffer
+                        examples_in_buffer = self.buffer[label] # torch.Size([n, 49, 10])
+                        # flatten the examples_in_buffer
+                        examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
+                        current_example = examples[i] # torch.Size([1, 49, 10])
+                        # flatten the current_example
+                        current_example = current_example.view(1, -1)
+                        # print('examples_in_buffer:', examples_in_buffer.size()) # torch.Size([n, 490])
+                        # print('current_example:', current_example.size()) # torch.Size([1, 490])
+
+                        # Calculate cosine similarity
+                        cos_similarities = F.cosine_similarity(examples_in_buffer.to(self.device), current_example.to(self.device), dim=-1) # torch.Size([n])
+                        # normalize the cosine similarities[-1,1]
+                        cos_similarities = 0.5 * (cos_similarities + 1)
+                        # randomly select an example from the buffer according to the cosine similarity
+                        sample_index = torch.multinomial(cos_similarities, 1).item()
+
+                        # # Calculate Euclidean distance
+                        # euclidean_distances = torch.norm(examples_in_buffer.to(self.device) - current_example.to(self.device), dim=-1)
+                        # # randomly select an example from the buffer according to the euclidean_distances
+                        # sample_index = torch.multinomial(euclidean_distances, 1).item()
+
+                        # sample_index = torch.argmax(cos_similarities)
+                        self.buffer[label][sample_index] = examples[i]
+
+                        self.num_seen_examples += 1
+                        self.class_count_total[label] += 1
+                    else:
+                        pass
+            
+
+    def get_data(self, input_size):
+        """
+        Get data from the buffer.
+        """
+
+        samples = []
+        labels = []
+
+        for i in range(input_size):
             label = random.choice(list(self.buffer.keys()))
             if self.buffer[label].size(0) >= 1:
                 indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
@@ -845,7 +1401,264 @@ class Buffer_DAECB:
         """
         return self.class_count
     
+        
+class Buffer_ClusterECB:
+    """
+    The memory buffer of rehearsal method.
+    """
+    def __init__(self, buffer_size, batch_size, config, device):
+        self.config = config
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.device = device
+        self.num_seen_examples = 0
+        self.buffer = {}
+        self.attributes = ['examples', 'labels']
+        self.buffer_filled = False
+        # self.buffer['examples'] = torch.empty((self.buffer_size, 1, 49, 10), device=self.device)
+        # self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
 
+        self.class_count = {}
+
+        self.class_count_total = {}
+
+        self.full_classes = []
+
+        self.clusters = {}
+        self.fit_flags = {}
+
+        print("Buffer initialized")
+
+
+    def get_total_class_count(self):
+        """
+        Get the total number of examples for each class in the self.buffer[label]
+        """
+        total_class_count = 0
+        for label in self.buffer.keys():
+            total_class_count += self.buffer[label].size(0)
+        return total_class_count
+
+    
+    def add_data(self, examples, labels):
+        """
+        Add data to the buffer.
+        examples: torch.Size([128, 1, 49, 10])
+        labels: torch.Size([128])
+        """
+
+        input_size = examples.size(0)
+        
+        if self.num_seen_examples < self.buffer_size:
+            
+            for i in range(input_size):
+                label = labels[i].item()
+                if (label not in self.buffer.keys()) or (self.buffer.items() == {}):
+                    # class is new.
+
+                    # examples: torch.Size([128, 1, 49, 10])
+                    # examples[i]: torch.Size([1, 49, 10])
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    # self.buffer[label].append(examples[i])
+                    # init the cluster for the new class
+                    self.clusters[label] = MiniBatchKMeansTorch(n_clusters=self.config['n_clusters'], n_features=490, max_iter=100, batch_size=10, device=self.device)
+                    self.fit_flags[label] = True
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+                else:
+                    # self.buffer[label] = [examples[i]]
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+                    self.class_count[label] += 1
+                    self.class_count_total[label] += 1
+                self.num_seen_examples += 1
+                # print('total_class_count:', self.get_total_class_count())
+                # print('class count:', self.get_class_count())
+            
+        else:
+            
+            
+            for i in range(input_size):
+                largest_class_count = max(self.class_count.values())
+                largest_classes = set(cls for cls, count in self.class_count.items() if count == largest_class_count)
+                # largest_classes_tensor = torch.tensor(list(largest_classes)).to(self.device)
+
+                self.full_classes = list(set(self.full_classes).union(largest_classes))
+                # print('full_classes:', self.full_classes)
+                label = labels[i].item()
+
+                if label not in self.buffer:
+                    # class is new.
+
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0) 
+                    # init the cluster for the new class
+                    self.clusters[label] = MiniBatchKMeansTorch(n_clusters=self.config['n_clusters'], n_features=490, max_iter=100, batch_size=10, device=self.device)
+                    self.fit_flags[label] = True
+                    # randomly select a class from the largest classes
+                    random_class = random.choice(list(largest_classes))
+                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+                    
+                    self.num_seen_examples += 1
+                    # add class count
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+
+                elif (label in self.buffer) and (label not in self.full_classes):
+       
+                    # class is not in the full classes
+
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0) # 
+
+                    largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
+
+                    # order the self.class_count_total.keys() by the value of self.class_count_total
+                    sorted_class_count_total = {k: v for k, v in sorted(self.class_count_total.items(), key=lambda item: item[1], reverse=True)}
+                    # # take intersection of largest_classes_with_count_larger_than_one and sorted_class_count_total
+                    # largest_classes_with_count_larger_than_one = list(set(largest_classes_with_count_larger_than_one).intersection(set(sorted_class_count_total)))
+                    random_class = random.choice(list(largest_classes_with_count_larger_than_one))
+
+                    exp_n = np.exp(-self.class_count_total[label])
+                    exp_sum = np.sum([np.exp(-v) for v in sorted_class_count_total.values()])
+                    w = exp_n / exp_sum
+                    gamma = self.buffer_size * w
+                    
+                    for key in sorted_class_count_total:
+                        if key in largest_classes_with_count_larger_than_one and self.class_count[key] >= gamma:
+                            random_class = key
+                            break
+                        
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+
+                    # examples_in_buffer = self.buffer[random_class] # torch.Size([n, 49, 10])
+                    # # flatten the examples_in_buffer
+                    # examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
+                    # current_example = examples[i] # torch.Size([1, 49, 10])
+                    # # flatten the current_example
+                    # current_example = current_example.view(1, -1)
+
+                    # self.clusters[random_class].fit(examples_in_buffer.to(self.device))
+
+                    # examples_in_buffer = self.clusters[random_class].remove_sample_from_largest_cluster(examples_in_buffer)
+
+                    # self.buffer[random_class] = examples_in_buffer.view(examples_in_buffer.size(0), 1, 49, 10)
+
+
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+        
+                    self.class_count[label] += 1
+                    self.num_seen_examples += 1
+                    self.class_count_total[label] += 1
+   
+                else:
+                    
+                    # class is in the full classes
+                    count_label_current = self.class_count[label]
+                    count_label_total = self.class_count_total[label]
+                    # print('len',len(self.buffer.keys()))
+                    # print('fit_flags', self.fit_flags)
+                    if (count_label_current >= int((self.buffer_size / len(self.buffer.keys()))-2)) and (self.fit_flags[label] == True):
+                        examples_in_buffer = self.buffer[label] # torch.Size([n, 49, 10])
+                        # flatten the examples_in_buffer
+                        examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
+                        self.clusters[label].fit(examples_in_buffer.to(self.device))
+                        self.fit_flags[label] = False
+                    
+                    # sample a u from uniform[0,1]
+                    u = int(torch.rand(1))
+                    if u <= count_label_current / count_label_total:
+                        
+
+                        # calculate cosine similarity between the current example and the examples in the buffer
+                        examples_in_buffer = self.buffer[label] # torch.Size([n, 49, 10])
+                        # flatten the examples_in_buffer
+                        examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
+                        current_example = examples[i] # torch.Size([1, 49, 10])
+                        # flatten the current_example
+                        current_example = current_example.view(1, -1)
+                        # print('examples_in_buffer:', examples_in_buffer.size()) # torch.Size([n, 490])
+                        # print('current_example:', current_example.size()) # torch.Size([1, 490])
+                        # if count_label_current is larger than buffer_size/number of keys in self.buffer
+                        if self.fit_flags[label] is True:
+                            self.clusters[label].fit(examples_in_buffer)
+                            self.fit_flags[label] = False
+                        else:
+                            examples_in_buffer = self.clusters[label].partial_fit(examples_in_buffer, current_example)
+     
+                        # self.buffer[label]: torch.Size([n, 49, 10])
+                        self.buffer[label] = examples_in_buffer.view(examples_in_buffer.size(0), 1, 49, 10)
+
+
+                        # sample_index = 
+                        # self.buffer[label][sample_index] = examples[i]
+
+                        self.num_seen_examples += 1
+                        self.class_count_total[label] += 1
+                    else:
+                        pass
+            
+
+    def get_data(self, input_size):
+        """
+        Get data from the buffer.
+        """
+
+        samples = []
+        labels = []
+
+        for i in range(input_size):
+            label = random.choice(list(self.buffer.keys()))
+            if self.buffer[label].size(0) >= 1:
+                indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
+                samples.append(self.buffer[label][indices])
+                labels.append(torch.tensor([label]).to(self.device))
+            else:
+                pass
+                # samples.append(self.buffer[label])
+                # labels.append(torch.tensor([label]).to(self.device))
+
+        return torch.cat(samples, 0), torch.cat(labels, 0)
+        
+    
+    def get_size(self):
+        """
+        Get the number of examples in the buffer.
+        """
+        num_examples = self.buffer['examples'].size(0)
+        num_labels = self.buffer['labels'].size(0)
+        assert num_examples == num_labels
+        return num_examples
+
+    def reset_num_seen_examples(self):
+        """
+        Reset the number of seen examples.
+        """
+        self.num_seen_examples = 0
+
+    def is_empty(self):
+        """
+        Check if the buffer is empty.
+        """
+        return self.num_seen_examples == 0  
+    
+    def get_class_count(self):
+        """
+        Get the number of examples for each class in the buffer.
+        """
+        return self.class_count
+   
 
 class Buffer_LAECB:
     """
@@ -858,10 +1671,6 @@ class Buffer_LAECB:
         self.num_seen_examples = 0
         self.buffer = {}
         self.loss = {}
-        self.attributes = ['examples', 'labels']
-        self.buffer_filled = False
-        # self.buffer['examples'] = torch.empty((self.buffer_size, 1, 49, 10), device=self.device)
-        # self.buffer['labels'] = torch.empty((self.buffer_size), device=self.device)
 
         self.loss_index = {}
 
@@ -871,7 +1680,39 @@ class Buffer_LAECB:
 
         self.full_classes = []
         print("Buffer initialized")
+    
+    def load_buffer(self, buffer_state):
+        '''
+        load the buffer
+        buffer_state = {'num_seen_examples': num_seen_examples, 
+                        'buffer': buffer, 
+                        'loss': loss, 
+                        'loss_index': loss_index, 
+                        'class_count': class_count, 
+                        'class_count_total': class_count_total, 
+                        'full_classes': full_classes}
+        '''
+        self.num_seen_examples = buffer_state['num_seen_examples']
+        self.buffer = buffer_state['buffer']
+        self.loss = buffer_state['loss']
+        self.loss_index = buffer_state['loss_index']
+        self.class_count = buffer_state['class_count']
+        self.class_count_total = buffer_state['class_count_total']
+        self.full_classes = buffer_state['full_classes']
+        
 
+    def get_entire_buffer(self):
+        '''
+        get everything in the buffer
+        self.num_seen_examples: int
+        self.buffer: dict
+        self.loss: dict
+        self.loss_index: dict
+        self.class_count: dict
+        self.class_count_total: dict
+        self.full_classes: list
+        '''
+        return self.num_seen_examples, self.buffer, self.loss, self.loss_index, self.class_count, self.class_count_total, self.full_classes
 
     def get_total_class_count(self):
         """
@@ -1025,7 +1866,7 @@ class Buffer_LAECB:
                         pass
             
 
-    def get_data(self):
+    def get_data(self, input_size):
         """
         Get data from the buffer.
         """
@@ -1040,7 +1881,7 @@ class Buffer_LAECB:
         samples = []
         # losses = [] # record the index of where the loss is sampled
         labels = []
-        for i in range(self.batch_size):
+        for i in range(input_size):
             label = random.choice(list(self.buffer.keys()))
             # print('label:', label)
             if self.buffer[label].size(0) >= 1:
@@ -1050,10 +1891,11 @@ class Buffer_LAECB:
                 self.loss_index[label].append(indices)
                 labels.append(torch.tensor([label]).to(self.device))
             else:
-                samples.append(self.buffer[label])
-                # losses.append(self.loss[label])
-                self.loss_index[label].append(0)
-                labels.append(torch.tensor([label]).to(self.device))
+                pass
+                # samples.append(self.buffer[label][0])
+                # # losses.append(self.loss[label])
+                # self.loss_index[label].append(0)
+                # labels.append(torch.tensor([label]).to(self.device))
 
         return torch.cat(samples, 0), torch.cat(labels, 0)
     
@@ -1067,7 +1909,6 @@ class Buffer_LAECB:
             # print('self.loss[label]',self.loss[label].shape, 'self.buffer[label].shape', self.buffer[label].shape)
             # print(f'{label}:',list(self.loss_index[label]))
 
-            
             for i in range(len(self.loss_index[label])):
                 self.loss[label][self.loss_index[label][i]] = losses[i]
         
@@ -1098,15 +1939,3 @@ class Buffer_LAECB:
         Get the number of examples for each class in the buffer.
         """
         return self.class_count
-    
-    # def get_class_count(self):
-    #     """
-    #     Get the number of examples for each class in the buffer.
-    #     """
-    #     class_count = {}
-    #     for label in self.buffer['labels']:
-    #         if label.item() in class_count:
-    #             class_count[label.item()] += 1
-    #         else:
-    #             class_count[label.item()] = 1
-    #     return class_count

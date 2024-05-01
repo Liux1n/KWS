@@ -1,6 +1,6 @@
 from methods.base_pretrain import base_pretrain
 from methods.joint_pretrain import joint_pretrain
-from methods.source_only import source_only
+
 import copy
 import torch
 import dataset

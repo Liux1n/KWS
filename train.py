@@ -22,7 +22,7 @@ import dataset
 import torch
 import wandb
 from typing import Optional
-from utils import confusion_matrix, npy_to_txt, per_noise_accuracy, load_config
+from utils import confusion_matrix, npy_to_txt, per_noise_accuracy, load_config, RandomAugmentor
 
 import torch.nn.functional as F
 
@@ -37,7 +37,7 @@ class Train():
         self.device = device
         self.args = args
         self.config = config
-
+        torch.manual_seed(self.config['seed'])
         # Training hyperparameters
         self.criterion = torch.nn.CrossEntropyLoss()
         intitial_lr = 0.001
@@ -173,17 +173,14 @@ class Train():
             num_iter = 20 if self.training_parameters['debug'] else len(data)
             num_print = 50
 
-            if task_id == 'cil_task_0':
-                num_iter = int((17/35)*num_iter)
-            elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
-                # num_iter = int((1/35)*num_iter)
-                num_iter = int((6/35)*num_iter)
             for minibatch in range(num_iter): 
             
                 inputs, labels, noises = data[0]
                 inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
                 labels = torch.Tensor(labels).to(self.device).long()
-
+                if inputs.size(0) == 0:
+                    print('number of minibatch: ', minibatch)
+                    break
                 # Zero out the parameter gradients after each mini-batch
                 self.optimizer.zero_grad()
 
@@ -215,13 +212,6 @@ class Train():
                 if (tmp_acc > best_acc):
                     best_acc = tmp_acc
                     best_ep  = epoch
-                    # get current time
-                    # import time
-                    # timestr = time.strftime("%Y%m%d-%H%M%S")
-                    # model_name = self.args.method + '_' + timestr + '_' + self.args.task + str(best_ep) + '_acc' + str(best_acc) + '.pth'
-                    # PATH = './models/' + model_name
-                    # #BEST_PATH = './model_ep' + str(best_ep) + '_acc' + str(best_acc) + '.pth'
-                    # torch.save(model.state_dict(), PATH)
                     best_state_dict = model.state_dict()
 
                 patience = 10
@@ -233,12 +223,20 @@ class Train():
 
         timestr = time.strftime("%Y%m%d-%H%M%S")
 
-        model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
-        PATH = './models/' + model_name
+        model_name = self.args.mode + '_' + self.args.method + '_' + timestr + '_' + self.args.remark + '.pth'
+        PATH = './new_models/' + model_name
 
         torch.save(best_state_dict, PATH)
 
+    def custom_cross_entropy(self, outputs, targets, class_indices):
+ 
+        outputs = outputs[:, class_indices]
+        targets = targets[:, class_indices]
 
+        log_probs = F.log_softmax(outputs, dim=1)
+        loss = -torch.sum(targets * log_probs) / outputs.shape[0]
+        return loss
+    
     def finetune(self, model, task_id = None): 
     
         
@@ -264,21 +262,15 @@ class Train():
             correct = 0   
 
             num_iter = 20 if self.training_parameters['debug'] else len(data)
-            if task_id == 'cil_task_0':
-                num_iter = int((17/35)*num_iter)
-            elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
-                num_iter = int((6/35)*num_iter)
-
-            # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
-            #     num_iter = int((3/18)*num_iter)
 
             for minibatch in range(num_iter): 
             
-
                 inputs, labels, noises = data[0]
                 inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
                 labels = torch.Tensor(labels).to(self.device).long()
-
+                if inputs.size(0) == 0:
+                    print('number of minibatch: ', minibatch)
+                    break
                 # Zero out the parameter gradients after each mini-batch
                 self.optimizer.zero_grad()
 
@@ -310,14 +302,15 @@ class Train():
                 model, 
                 memory_buffer, 
                 task_id = None,):
-    
+
         # memory_buffer = memory_buffer.to(self.device)
         memory_buffer_size = self.config['memory_buffer_size']
         # Train model
         best_acc = 0
         num_epochs = 1 if self.args.debug else self.config['epochs_CL']
         # memory_buffer.to_device(self.device)
-  
+        criterion = torch.nn.CrossEntropyLoss()
+        alpha = self.config['alpha']
         for epoch in range(0, num_epochs):
 
             data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
@@ -332,43 +325,71 @@ class Train():
             total = 0
             correct = 0   
 
-            # num_iter = 20 if self.training_parameters['debug'] else len(data)
             num_iter = len(data)
-            if task_id == 'cil_task_0':
-                num_iter = int((17/35)*num_iter)
-            elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
-                num_iter = int((6/35)*num_iter)
-            
-            # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
-            #     num_iter = int((3/18)*num_iter)
-            num_print = 50
+
+            num_print = 20
 
             for minibatch in range(num_iter): 
 
                 inputs, labels, _ = data[0]
-                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device) # torch.Size([128, 1, 49, 10])
                 labels = torch.Tensor(labels).to(self.device).long()
-                
+                if inputs.size(0) == 0: # inputsize torch.Size([0, 1, 49, 10])
+                    break
+                input_size = int(inputs.size(0))
                 # update memory buffer in the last epoch (to ensure that the memory buffer
                 # is not updated multiple times)
                 if epoch == num_epochs - 1:
                     memory_buffer.add_data(inputs, labels)
-
-                samples_inputs, samples_labels = memory_buffer.get_data()
+                # check input shape
+                
+                if self.args.method == 'ER_NRS':
+                    samples_inputs, samples_labels = memory_buffer.get_data()
+                else:
+                    samples_inputs, samples_labels = memory_buffer.get_data(input_size)
+                # check  samples_inputs shape
+                
                 # samples_inputs = samples_inputs.to(self.device)
                 # samples_labels = samples_labels.to(self.device).long()
                 samples_labels = samples_labels.long()
                 # samples_labels = torch.Tensor(samples_labels).to(self.device).long()
+
+                # print('inputs.shape: ', inputs.shape, ', samples_inputs.shape: ', samples_inputs.shape, ', epoch: ', epoch, ', minibatch: ', minibatch)
+                # print('samples_inputs.shape', samples_inputs.shape)
                 inputs = torch.cat((inputs, samples_inputs), 0) # torch.Size([256, 1, 49, 10])
                 labels = torch.cat((labels, samples_labels), 0) # torch.Size([256])
-                
+                # print('epoch', epoch, 'minibatch', minibatch)
                 # Zero out the parameter gradients after each mini-batch
                 self.optimizer.zero_grad()
 
                 # Train, compute loss, update optimizer
                 model = model.to(self.device)
                 outputs = F.softmax(model(inputs), dim=1)
-                loss = self.criterion(outputs, labels)
+                if self.args.dynamic_loss:
+                    outputs_new = outputs[:input_size]
+                    outputs_buffer = outputs[input_size:]
+                    labels_new = labels[:input_size]
+                    labels_buffer = labels[input_size:]
+                
+                    loss_new = criterion(outputs_new, labels_new)
+        
+                    loss_buffer = criterion(outputs_buffer, labels_buffer)
+
+                    loss = loss_buffer + loss_new
+                    # loss_ratio = loss_new / loss_old
+                    # # total loss
+                    # # if loss_ratio is large, total loss should focus more on new data.
+                    # # if loss_ratio is small, total loss should focus more on old data.
+                    # if loss_ratio > 1:
+                    #     loss = loss_old + (1/loss_ratio) * loss_new
+                    # else: # loss_ratio <= 1
+                    #     loss = (1/loss_ratio) * loss_old + loss_new
+                    
+                else: 
+                    loss = self.criterion(outputs, labels) # torch.Size([256])
+
+
+                # loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
 
@@ -386,16 +407,6 @@ class Train():
                     print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
                     
                     running_loss = 0.0
-                # Print information every 50 minibatches
-                # if minibatch % 50 == 0: 
-                #     print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
-                #     if self.args.wandb:
-                #         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
-                #     running_loss = 0.0
-                
-                
-
-
             
 
             tmp_acc = self.validate(model, 'validation', task_id = task_id)
@@ -408,6 +419,397 @@ class Train():
 
         return model, memory_buffer
 
+    def ER_custom(self, 
+                model, 
+                memory_buffer, 
+                task_id = None,):
+    
+        num_epochs = 1 if self.args.debug else self.config['epochs_CL']
+        # memory_buffer.to_device(self.device)
+        self.criterion = torch.nn.CrossEntropyLoss(reduction = 'none')
+        buffer_data_ratio = 1
+        for epoch in range(0, num_epochs):
+
+            data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
+            print("Data length: " + str(len(data))) # 288
+            
+            print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
+
+            model.train()
+            self.scheduler.step()
+
+            running_loss = 0.0
+            total = 0
+            correct = 0   
+
+            # num_iter = 20 if self.training_parameters['debug'] else len(data)
+            num_iter = len(data)
+            num_print = 20
+
+            for minibatch in range(num_iter): 
+
+                inputs, labels, _ = data[0]
+                inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device) # torch.Size([128, 1, 49, 10])
+                labels = torch.Tensor(labels).to(self.device).long()
+                if inputs.size(0) == 0: # inputsize torch.Size([0, 1, 49, 10])
+                    break
+                input_size = int(inputs.size(0)) # 128
+                # update memory buffer in the last epoch (to ensure that the memory buffer
+                # is not updated multiple times)
+                
+                # check input shape
+                # sample_size = int(input_size*buffer_data_ratio)
+                # if sample_size > 1:
+                #     samples_inputs, samples_labels = memory_buffer.get_data(sample_size)
+                # else:
+                #     samples_inputs, samples_labels = memory_buffer.get_data(input_size)
+
+                # augmentation for samples: Clipping Distortion, Time Mask, Shift, and Random Frequency Mask on MFCC
+                # if self.args.augmentation:
+                #     augmentor = RandomAugmentor(device=self.device)
+                #     samples_inputs = augmentor.apply(samples_inputs)
+
+                samples_inputs, samples_labels = memory_buffer.get_data(input_size)
+
+                samples_labels = samples_labels.long()
+                # samples_labels = torch.Tensor(samples_labels).to(self.device).long()
+
+                inputs = torch.cat((inputs, samples_inputs), 0) # torch.Size([256, 1, 49, 10])
+                labels = torch.cat((labels, samples_labels), 0) # torch.Size([256])
+                # print('epoch', epoch, 'minibatch', minibatch)
+                # Zero out the parameter gradients after each mini-batch
+                
+                self.optimizer.zero_grad()
+
+                # Train, compute loss, update optimizer
+                model = model.to(self.device)
+                outputs = F.softmax(model(inputs), dim=1)
+                loss = self.criterion(outputs, labels) # torch.Size([256])
+
+ 
+                loss_per_class = {}
+                # group loss[input_size:] by labels
+                for i in range(input_size, len(loss)):
+                    if labels[i].item() in loss_per_class:
+                        loss_per_class[labels[i].item()].append(loss[i].item())
+                    else:
+                        loss_per_class[labels[i].item()] = [loss[i].item()]
+                # print('loss_per_class', loss_per_class)
+                # get the mean loss for each class
+                for key in loss_per_class:
+                    loss_per_class[key] = sum(loss_per_class[key])/len(loss_per_class[key])
+
+                # sort the class by loss, ascending order
+                loss_per_class = dict(sorted(loss_per_class.items(), key=lambda item: item[1]))
+                
+                # only get the keys.
+                # max_loss_class = list(loss_per_class.keys())
+                print('max_loss_class', loss_per_class)
+                # if epoch == num_epochs - 1:
+                if epoch == 0:
+                    memory_buffer.add_data(inputs[:input_size], labels[:input_size], loss_per_class)
+
+                # print('max_loss_class', max_loss_class)
+                # mean loss
+                loss = loss.mean()
+                loss.backward()
+                self.optimizer.step()
+
+                # Compute training statistics
+                running_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                TP_all = (predicted == labels) # True Positive size: torch.Size([256])
+                TP_inputs = TP_all[:input_size] # torch.Size([128])
+                TP_samples = TP_all[input_size:] # torch.Size([128])
+                # Calculate accuracy for inputs
+                accuracy_inputs = TP_inputs.float().mean().item() # 
+
+                # Calculate accuracy for samples
+                accuracy_samples = TP_samples.float().mean().item()
+                # Calculate accuracy ratio
+                if accuracy_samples == 0:
+                    accuracy_ratio = 2
+                else:
+                    accuracy_ratio = accuracy_inputs / accuracy_samples 
+
+                # if accuracy_ratio is high, more data from memory buffer should be used.
+                # if accuracy_ratio is low, less data from memory buffer should be used.
+
+                buffer_data_ratio = accuracy_ratio
+                # print('accuracy_ratio: ', accuracy_ratio)
+                correct += (predicted == labels).sum().item()
+                
+                if self.args.wandb:
+                    wandb.log({'training loss': loss.item(), 'accuracy': 100 * correct / total})   
+
+                # Print information every 50 minibatches
+                if minibatch % num_print == 0: 
+                    print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
+                    
+                    running_loss = 0.0
+                # Print information every 50 minibatches
+                # if minibatch % 50 == 0: 
+                #     print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / 10, 100 * correct / total))
+                #     if self.args.wandb:
+                #         wandb.log({'loss': running_loss / 10, 'accuracy': 100 * correct / total})   
+                #     running_loss = 0.0
+                
+
+            tmp_acc = self.validate(model, 'validation', task_id = task_id)
+
+        
+        # model_name = self.args.method + '_' + self.args.task + '_model.pth'
+        # PATH = './models/' + model_name
+        # torch.save(model.state_dict(), PATH)
+
+
+        return model, memory_buffer
+
+    def ER_LossECB(self, 
+                model, 
+                memory_buffer, 
+                task_id = None,):
+        
+        self.criterion = torch.nn.CrossEntropyLoss(reduction = 'none')
+        # memory_buffer = memory_buffer.to(self.device)
+
+        # Train model
+        best_acc = 0
+        if task_id == 'cil_task_0':
+            num_epochs = 1 if self.args.debug else self.config['epochs']
+            for epoch in range(0, num_epochs):
+
+                data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
+                print("Data length: " + str(len(data))) # 288
+                
+                if task_id == 'cil_task_0':
+                    print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs']))
+                else:
+                    print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
+
+                model.train()
+                self.scheduler.step()
+
+                running_loss = 0.0
+                total = 0
+                correct = 0   
+
+                # num_iter = 20 if self.training_parameters['debug'] else len(data)
+                num_iter = len(data)
+
+
+                num_print = 20
+                
+
+                for minibatch in range(num_iter): 
+                # for minibatch in range(1): 
+
+                    inputs, labels, _ = data[0]
+                    inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                    labels = torch.Tensor(labels).to(self.device).long()
+                    if inputs.size(0) == 0:
+                        break
+                    input_size = int(inputs.size(0))
+                    self.optimizer.zero_grad()
+
+                    # Train, compute loss, update optimizer
+                    model = model.to(self.device)
+                    outputs = F.softmax(model(inputs), dim=1)
+                    loss = self.criterion(outputs, labels) # torch.Size([256])
+  
+                        
+                    if epoch == num_epochs - 1:
+                    # if epoch == 0:
+                        loss_per_class = {}
+                        # group loss[input_size:] by labels
+                        for i in range(len(loss)):
+                            if labels[i].item() in loss_per_class:
+                                loss_per_class[labels[i].item()].append(loss[i].item())
+                            else:
+                                loss_per_class[labels[i].item()] = [loss[i].item()]
+                        # print('loss_per_class', loss_per_class)
+                        # get the mean loss for each class
+                        for key in loss_per_class:
+                            loss_per_class[key] = sum(loss_per_class[key])/len(loss_per_class[key])
+
+                        # sort the class by loss, ascending order
+                        loss_per_class = dict(sorted(loss_per_class.items(), key=lambda item: item[1]))
+                        
+                        # only get the keys.
+                        # max_loss_class = list(loss_per_class.keys())
+                        # print('loss_per_class', loss_per_class)
+                        memory_buffer.add_data(inputs[:input_size], labels[:input_size], loss_per_class)
+                    
+                        
+                    loss = loss.mean()
+                    loss.backward()
+                    self.optimizer.step()
+
+
+                    running_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+                    
+                    if self.args.wandb:
+                        wandb.log({'training loss': loss.item(), 'accuracy': 100 * correct / total})   
+
+                    # Print information every 50 minibatches
+                    if minibatch % num_print == 0: 
+                        print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
+                        
+                        running_loss = 0.0
+                    
+
+
+                tmp_acc = self.validate(model, 'validation', task_id = task_id)
+                if self.args.early_stop:
+                    # Save best performing network
+                    if (tmp_acc > best_acc):
+                        best_acc = tmp_acc
+                        best_ep  = epoch
+                        best_state_dict = model.state_dict()
+
+                    patience = 10
+                    if (epoch >= best_ep + patience):
+                        break
+                else:
+                    best_state_dict = model.state_dict()
+        
+
+            timestr = time.strftime("%Y%m%d-%H%M%S")
+            if self.args.early_stop:
+                model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
+            else:
+                model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + '_acc' + str(best_acc) + '.pth'
+            model_path = './models/' + model_name
+
+            torch.save(best_state_dict, model_path)
+
+            return model_path, memory_buffer
+
+        else:
+            num_epochs = 1 if self.args.debug else self.config['epochs_CL']
+            # num_epochs = 2
+   
+
+            for epoch in range(0, num_epochs):
+
+                data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
+                print("Data length: " + str(len(data))) # 288
+                
+                if task_id == 'cil_task_0':
+                    print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs']))
+                else:
+                    print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
+
+                model.train()
+                self.scheduler.step()
+
+                running_loss = 0.0
+                total = 0
+                correct = 0   
+
+                # num_iter = 20 if self.training_parameters['debug'] else len(data)
+                num_iter = len(data)
+                
+                num_print = 50
+
+                for minibatch in range(num_iter): 
+
+                    inputs, labels, _ = data[0]
+                    inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                    labels = torch.Tensor(labels).to(self.device).long()
+                    if inputs.size(0) == 0:
+                        break
+                    input_size = int(inputs.size(0))
+                    # update memory buffer in the last epoch (to ensure that the memory buffer
+                    # is not updated multiple times)
+                    
+                    samples_inputs, samples_labels = memory_buffer.get_data(input_size) 
+    
+                    # samples_inputs = samples_inputs.to(self.device)
+                    # samples_labels = samples_labels.to(self.device).long()
+                    samples_labels = samples_labels.long()
+                    # samples_labels = torch.Tensor(samples_labels).to(self.device).long()
+                    inputs = torch.cat((inputs, samples_inputs), 0) # torch.Size([256, 1, 49, 10])
+                    labels = torch.cat((labels, samples_labels), 0) # torch.Size([256])
+                    
+                    # Zero out the parameter gradients after each mini-batch
+                    self.optimizer.zero_grad()
+
+                    # Train, compute loss, update optimizer
+                    model = model.to(self.device)
+                    outputs = F.softmax(model(inputs), dim=1)
+                    loss = self.criterion(outputs, labels) # torch.Size([256])
+
+                    # if epoch == num_epochs - 1:
+                    # # if epoch == 0:
+                    #     # print('loss.shape', loss.shape)
+                    #     if minibatch > 0:
+                    #         memory_buffer.update_loss(loss[input_size:])
+                    #     else:
+                    #         pass
+                    #     # add only first 128 input, loss and labels
+                    #     memory_buffer.add_data(inputs[:input_size], loss[:input_size], labels[:input_size])
+                        
+                    #     # update loss
+
+                    if epoch == num_epochs - 1:
+                    # if epoch == 0:
+                        loss_per_class = {}
+                        # group loss[input_size:] by labels
+                        for i in range(input_size, len(loss)):
+                            if labels[i].item() in loss_per_class:
+                                loss_per_class[labels[i].item()].append(loss[i].item())
+                            else:
+                                loss_per_class[labels[i].item()] = [loss[i].item()]
+                        # print('loss_per_class', loss_per_class)
+                        # get the mean loss for each class
+                        for key in loss_per_class:
+                            loss_per_class[key] = sum(loss_per_class[key])/len(loss_per_class[key])
+
+                        # sort the class by loss, ascending order
+                        loss_per_class = dict(sorted(loss_per_class.items(), key=lambda item: item[1]))
+                        
+                        # only get the keys.
+                        # max_loss_class = list(loss_per_class.keys())
+   
+                        memory_buffer.add_data(inputs[:input_size], labels[:input_size], loss_per_class)
+                        
+
+                    # mean loss
+                    # loss = loss.mean()
+                    loss.mean().backward()
+                    self.optimizer.step()
+                    # loss.item() # shape: torch.Size([256])
+        
+                    
+
+                    # Compute training statistics
+                    mean_loss = loss.mean().item()
+                    running_loss += mean_loss
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+                    
+                    if self.args.wandb:
+                        wandb.log({'training loss': mean_loss, 'accuracy': 100 * correct / total})   
+
+                    # Print information every 50 minibatches
+                    if minibatch % num_print == 0: 
+                        print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
+                        
+                        running_loss = 0.0
+                    
+
+
+                tmp_acc = self.validate(model, 'validation', task_id = task_id)
+    
+
+            return model, memory_buffer
+
     def ER_LAECB(self, 
                 model, 
                 memory_buffer, 
@@ -418,6 +820,7 @@ class Train():
         memory_buffer_size = self.config['memory_buffer_size']
         # Train model
         best_acc = 0
+
         if task_id == 'cil_task_0':
             num_epochs = self.config['epochs']
             for epoch in range(0, num_epochs):
@@ -439,14 +842,7 @@ class Train():
 
                 # num_iter = 20 if self.training_parameters['debug'] else len(data)
                 num_iter = len(data)
-                if task_id == 'cil_task_0':
-                    num_iter = int((17/35)*num_iter)
-                elif task_id == 'cil_task_1' or task_id == 'cil_task_2' or task_id == 'cil_task_3':
-                    num_iter = int((6/35)*num_iter)
-                
-                # elif task_id == 'dil_task_1' or task_id == 'dil_task_2' or task_id == 'dil_task_3':
-                #     num_iter = int((3/18)*num_iter)
-                num_print = 50
+                num_print = 20
                 
 
                 for minibatch in range(num_iter): 
@@ -455,17 +851,20 @@ class Train():
                     inputs, labels, _ = data[0]
                     inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
                     labels = torch.Tensor(labels).to(self.device).long()
+                    if inputs.size(0) == 0:
+                        break
                     self.optimizer.zero_grad()
 
                     # Train, compute loss, update optimizer
                     model = model.to(self.device)
                     outputs = F.softmax(model(inputs), dim=1)
                     loss = self.criterion(outputs, labels) # torch.Size([256])
-                    memory_buffer.update_loss(loss)
-
-                    if epoch == num_epochs - 1:
+  
+                    # if epoch == num_epochs - 1:
+                    if epoch == 0:
                         # update loss
-                        
+                        if minibatch > 0:
+                            memory_buffer.update_loss(loss)
                         memory_buffer.add_data(inputs, loss, labels)
                         
 
@@ -510,9 +909,11 @@ class Train():
                 model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
             else:
                 model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + '_acc' + str(best_acc) + '.pth'
-            PATH = './models/' + model_name
+            model_path = './models/' + model_name
 
-            torch.save(best_state_dict, PATH)
+            torch.save(best_state_dict, model_path)
+
+            return model_path, memory_buffer
 
         else:
             num_epochs = 1 if self.args.debug else self.config['epochs_CL']
@@ -552,11 +953,13 @@ class Train():
                     inputs, labels, _ = data[0]
                     inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
                     labels = torch.Tensor(labels).to(self.device).long()
-                    
+                    if inputs.size(0) == 0:
+                        break
+                    input_size = int(inputs.size(0))
                     # update memory buffer in the last epoch (to ensure that the memory buffer
                     # is not updated multiple times)
                     
-                    samples_inputs, samples_labels = memory_buffer.get_data() # 
+                    samples_inputs, samples_labels = memory_buffer.get_data(input_size) 
     
                     # samples_inputs = samples_inputs.to(self.device)
                     # samples_labels = samples_labels.to(self.device).long()
@@ -572,13 +975,17 @@ class Train():
                     model = model.to(self.device)
                     outputs = F.softmax(model(inputs), dim=1)
                     loss = self.criterion(outputs, labels) # torch.Size([256])
-                    memory_buffer.update_loss(loss[128:])
-                    
-                    # if epoch == num_epochs - 1:
-                    if epoch == 0:
-                        
+
+                    if epoch == num_epochs - 1:
+                    # if epoch == 0:
+                        # print('loss.shape', loss.shape)
+                        if minibatch > 0:
+                            memory_buffer.update_loss(loss[input_size:])
+                        else:
+                            pass
                         # add only first 128 input, loss and labels
-                        memory_buffer.add_data(inputs[:128], loss[:128], labels[:128])
+                        memory_buffer.add_data(inputs[:input_size], loss[:input_size], labels[:input_size])
+                        
                         # update loss
                         
 
@@ -591,14 +998,14 @@ class Train():
                     
 
                     # Compute training statistics
-                    mean_loss = torch.mean(loss)
+                    mean_loss = loss.mean().item()
                     running_loss += mean_loss
                     _, predicted = torch.max(outputs.data, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
                     
                     if self.args.wandb:
-                        wandb.log({'training loss': loss.item(), 'accuracy': 100 * correct / total})   
+                        wandb.log({'training loss': mean_loss, 'accuracy': 100 * correct / total})   
 
                     # Print information every 50 minibatches
                     if minibatch % num_print == 0: 
@@ -611,10 +1018,7 @@ class Train():
                 tmp_acc = self.validate(model, 'validation', task_id = task_id)
     
 
-
-
-        return model, memory_buffer
-
+            return model, memory_buffer
 
     # def adapt (self, model, noise):
 

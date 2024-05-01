@@ -5,14 +5,16 @@ data_url: 'https://storage.googleapis.com/download.tensorflow.org/data/speech_co
 # noise_dir: 'G:\SemesterProject\DEMAND\dataset' # win
 noise_dir: '/usr/scratch/sassauna2/sem24f39/DEMAND/dataset_48k' # linux
 noise_dataset: 'demand'
+volume_ratio: 1 # lower means noise volume is higher
 # hyperparameters
-epochs: 200
-epochs_CL: 16
+epochs: 1
+epochs_CL: 1
 n_classes: 35
 # n_classes: 12
 batch_size: 128
 new_data_ratio: 0.5
-SNR: 0
+snr: -10
+n_batches_dil: 110
 silence_percentage: 10.0
 unknown_percentage: 10.0
 validation_percentage: 10.0
@@ -21,6 +23,10 @@ background_frequency: 1
 background_volume: 1
 memory_buffer_size: 1024
 new_data_ratio: 0.5
+n_clusters: 10
+alpha: 0.5
+# seed: 59185
+seed: 4
 #
 project_name: 'KWS'
 
