@@ -7,13 +7,15 @@ noise_dir: '/usr/scratch/sassauna2/sem24f39/DEMAND/dataset_48k' # linux
 noise_dataset: 'demand'
 volume_ratio: 1 # lower means noise volume is higher
 # hyperparameters
-epochs: 1
-epochs_CL: 1
+epochs: 200 # pretraining epochs
+epochs_CL: 16 # Continual Learning epochs
 n_classes: 35
 # n_classes: 12
 batch_size: 128
+patience: 10
+# data processing
 new_data_ratio: 0.5
-snr: -10
+snr: -20 # dB
 n_batches_dil: 110
 silence_percentage: 10.0
 unknown_percentage: 10.0
@@ -26,7 +28,7 @@ new_data_ratio: 0.5
 n_clusters: 10
 alpha: 0.5
 # seed: 59185
-seed: 4
-#
+seed: 3
+# wandb
 project_name: 'KWS'
 

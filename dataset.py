@@ -91,6 +91,7 @@ class AudioProcessor(object):
       self.data_processing_parameters = data_processing_parameters
 
 
+
   def generate_data_dictionary(self, training_parameters):
 
     # For each data set, generate a dictionary containing the path to each file, its label, and its speaker.
@@ -228,12 +229,40 @@ class AudioProcessor(object):
     # Compute data set size
 
     return len(self.data_set[mode])
+  
+  def divide_data_set(self, training_parameters, task_id):
+    n_samples_task_0 = training_parameters['batch_size']*352
+    n_samples_task_1 = training_parameters['batch_size']*80
+    n_samples_task_2 = training_parameters['batch_size']*125
+    n_samples_task_3 = training_parameters['batch_size']*108
+    if task_id == 'dil_task_0':
+      # take first n_samples from the training set as training set
+      # start_idx = 0
+      end_idx = n_samples_task_0
+      self.data_set['training'] = self.data_set['training'][:end_idx]
+    elif task_id == 'dil_task_1':
+      # take the next n_samples from the training set as training set
+      start_idx = n_samples_task_0+1
+      end_idx = n_samples_task_0 + n_samples_task_1
+      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+    elif task_id == 'dil_task_2':
+      # take the next n_samples from the training set as training set
+      start_idx = n_samples_task_0 + n_samples_task_1 + 1
+      end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2
+      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+    elif task_id == 'dil_task_3':
+      # take the next n_samples from the training set as training set
+      start_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + 1
+      end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + n_samples_task_3
+      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+    
 
 
   def get_data(self, mode, training_parameters, task_id, task, offset):
     # Prepare and return data (utterances and labels) for inference
     # Pick one of the partitions to choose samples from
     candidates = self.data_set[mode] # TODO: modify this for CIL
+    
     snr = training_parameters['snr']
     # {'label': 'two', 'file': '/usr/scratch/sassauna2/sem24f39/GSC/dataset/two/caf9fceb_nohash_1.wav', 'speaker': 'caf9fceb'}
     # target_words='yes,no,up,down,left,right,on,off,stop,go,'
@@ -252,6 +281,7 @@ class AudioProcessor(object):
       if training_parameters['mode'] == 'cil':
         if task_id == 'cil_task_0': # 1 to 17
           labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          # labels = set(['yes','no'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_task_1': # 18 to 23
@@ -288,21 +318,21 @@ class AudioProcessor(object):
 
         else:
           pass
-      elif training_parameters['mode'] == 'dil':
-        if task_id == 'dil_task_0':
-          pass
-        elif task_id == 'dil_task_1':
-          n_samples = training_parameters['batch_size']*80
-          # randomly select n_samples from the training set
-          candidates = np.random.choice(candidates, n_samples, replace=False)
-        elif task_id == 'dil_task_2':
-          n_samples = training_parameters['batch_size']*125
-          # randomly select n_samples from the training set
-          candidates = np.random.choice(candidates, n_samples, replace=False)
-        elif task_id == 'dil_task_3':
-          n_samples = training_parameters['batch_size']*108
-          # randomly select n_samples from the training set
-          candidates = np.random.choice(candidates, n_samples, replace=False)
+      # elif training_parameters['mode'] == 'dil':
+      #   if task_id == 'dil_task_0':
+      #     pass
+      #   elif task_id == 'dil_task_1':
+      #     n_samples = training_parameters['batch_size']*80
+      #     # randomly select n_samples from the training set
+      #     candidates = np.random.choice(candidates, n_samples, replace=False) # TODO: fix this! no random. Do it at init of audioprocessor
+      #   elif task_id == 'dil_task_2':
+      #     n_samples = training_parameters['batch_size']*125
+      #     # randomly select n_samples from the training set
+      #     candidates = np.random.choice(candidates, n_samples, replace=False)
+      #   elif task_id == 'dil_task_3':
+      #     n_samples = training_parameters['batch_size']*108
+      #     # randomly select n_samples from the training set
+      #     candidates = np.random.choice(candidates, n_samples, replace=False)
 
 
 
@@ -563,11 +593,11 @@ class AudioGenerator(torch.utils.data.Dataset):
           training_parameters['background_volume'] = 0
           training_parameters['time_shift_samples'] = 0
         self.training_parameters = training_parameters
-
         # Preparing data for ODDA
         self.position = 0
         self.task = task
         self.task_id = task_id
+
 
 
     def __len__(self):

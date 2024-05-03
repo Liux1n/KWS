@@ -231,6 +231,130 @@ def parameter_generation(args=None, config=None, task_id=None):
         # Task 1: keyword 18 to 23
         # Task 2: keyword 24 to 29
         # Task 3: keyword 30 to 35
+        # if args.mode == 'dil':
+
+        #     if task_id == None:
+        #         # not used.
+        #         training_parameters['noise_test']  = ['DKITCHEN']
+
+        #         training_parameters['noise_train'] = ['DKITCHEN']
+
+        #     elif task_id == 'dil_task_0':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+        #         training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+
+        #     elif task_id == 'dil_task_1':
+
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION']
+
+        #         training_parameters['noise_train'] = ['PCAFETER', 'PRESTO', 'PSTATION']
+
+        #     elif task_id == 'dil_task_2':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'SCAFE', 'SPSQUARE', 'STRAFFIC']
+        #         training_parameters['noise_train'] = ['SCAFE', 'SPSQUARE', 'STRAFFIC']
+                
+        #     elif task_id == 'dil_task_3':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'SCAFE', 'SPSQUARE', 'STRAFFIC',\
+        #                                             'TBUS', 'TCAR', 'TMETRO']
+   
+        #         training_parameters['noise_train'] = ['TBUS', 'TCAR', 'TMETRO']
+
+        #     elif task_id == 'dil_joint':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'SCAFE', 'SPSQUARE', 'STRAFFIC',\
+        #                                             'TBUS', 'TCAR', 'TMETRO']
+
+        #         training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'SCAFE', 'SPSQUARE', 'STRAFFIC',\
+        #                                             'TBUS', 'TCAR', 'TMETRO']
+                
+        #     if task_id == 'dil_task_0_disjoint':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+            
+        #     elif task_id == 'dil_task_1_disjoint':
+        #         training_parameters['noise_test']  = ['PCAFETER', 'PRESTO', 'PSTATION']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+
+        #     elif task_id == 'dil_task_2_disjoint':
+        #         training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+
+        #     elif task_id == 'dil_task_3_disjoint':
+        #         training_parameters['noise_test']  = ['TBUS', 'TCAR', 'TMETRO']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+        
+        # if args.mode == 'dil':
+
+        #     if task_id == None:
+        #         # not used.
+        #         training_parameters['noise_test']  = ['DKITCHEN']
+
+        #         training_parameters['noise_train'] = ['DKITCHEN']
+
+        #     elif task_id == 'dil_task_0':
+        #         # training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+        #         # training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+
+        #         training_parameters['noise_test'] = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO']
+        #         training_parameters['noise_train'] = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO']
+
+        #     elif task_id == 'dil_task_1':
+
+        #         training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION']
+
+        #         training_parameters['noise_train'] = ['PCAFETER', 'PRESTO', 'PSTATION']
+
+        #     elif task_id == 'dil_task_2':
+        #         training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'DKITCHEN', 'DLIVING', 'DWASHING']
+        #         training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING']
+                
+        #     elif task_id == 'dil_task_3':
+        #         training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'DKITCHEN', 'DLIVING', 'DWASHING',\
+        #                                             'OHALLWAY', 'OMEETING', 'OOFFICE']
+   
+        #         training_parameters['noise_train'] = ['OHALLWAY', 'OMEETING', 'OOFFICE']
+
+        #     elif task_id == 'dil_joint':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'SCAFE', 'SPSQUARE', 'STRAFFIC',\
+        #                                             'TBUS', 'TCAR', 'TMETRO']
+
+        #         training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
+        #                                             'PCAFETER', 'PRESTO', 'PSTATION',\
+        #                                             'SCAFE', 'SPSQUARE', 'STRAFFIC',\
+        #                                             'TBUS', 'TCAR', 'TMETRO']
+                
+        #     if task_id == 'dil_task_0_disjoint':
+        #         training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+            
+        #     elif task_id == 'dil_task_1_disjoint':
+        #         training_parameters['noise_test']  = ['PCAFETER', 'PRESTO', 'PSTATION']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+
+        #     elif task_id == 'dil_task_2_disjoint':
+        #         training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+
+        #     elif task_id == 'dil_task_3_disjoint':
+        #         training_parameters['noise_test']  = ['TBUS', 'TCAR', 'TMETRO']
+        #         training_parameters['noise_train'] = ['DKITCHEN'] # not used.
+        
+                
         if args.mode == 'dil':
 
             if task_id == None:
@@ -240,33 +364,33 @@ def parameter_generation(args=None, config=None, task_id=None):
                 training_parameters['noise_train'] = ['DKITCHEN']
 
             elif task_id == 'dil_task_0':
-                training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
-                
-                training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+                # training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+                # training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+
+                training_parameters['noise_test'] = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO']
+                training_parameters['noise_train'] = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO']
 
             elif task_id == 'dil_task_1':
 
-                training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
-                                                    'PCAFETER', 'PRESTO', 'PSTATION']
-                
-                # training_parameters['noise_test'] = ['DKITCHEN']
+                training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO',\
+                                                      'OHALLWAY', 'OMEETING', 'OOFFICE']
+                                                    
 
-                training_parameters['noise_train'] = ['PCAFETER', 'PRESTO', 'PSTATION']
+                training_parameters['noise_train'] = ['OHALLWAY', 'OMEETING', 'OOFFICE']
 
             elif task_id == 'dil_task_2':
-                training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
-                                                    'PCAFETER', 'PRESTO', 'PSTATION',\
-                                                    'SCAFE', 'SPSQUARE', 'STRAFFIC']
-
-                training_parameters['noise_train'] = ['SCAFE', 'SPSQUARE', 'STRAFFIC']
+                training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO',\
+                                                      'OHALLWAY', 'OMEETING', 'OOFFICE',\
+                                                    'DKITCHEN', 'DLIVING', 'DWASHING']
+                training_parameters['noise_train'] = ['DKITCHEN', 'DLIVING', 'DWASHING']
                 
             elif task_id == 'dil_task_3':
-                training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
-                                                    'PCAFETER', 'PRESTO', 'PSTATION',\
-                                                    'SCAFE', 'SPSQUARE', 'STRAFFIC',\
-                                                    'TBUS', 'TCAR', 'TMETRO']
-
-                training_parameters['noise_train'] = ['TBUS', 'TCAR', 'TMETRO']
+                training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO',\
+                                                      'OHALLWAY', 'OMEETING', 'OOFFICE',\
+                                                    'DKITCHEN', 'DLIVING', 'DWASHING',\
+                                                    'PCAFETER', 'PRESTO', 'PSTATION']
+   
+                training_parameters['noise_train'] = ['PCAFETER', 'PRESTO', 'PSTATION']
 
             elif task_id == 'dil_joint':
                 training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE',\
@@ -294,7 +418,8 @@ def parameter_generation(args=None, config=None, task_id=None):
             elif task_id == 'dil_task_3_disjoint':
                 training_parameters['noise_test']  = ['TBUS', 'TCAR', 'TMETRO']
                 training_parameters['noise_train'] = ['DKITCHEN'] # not used.
-            
+        
+
         else:
             # not used.
             training_parameters['noise_test'] = ['DKITCHEN']
@@ -1321,32 +1446,18 @@ class Buffer_LossECB:
                     # sample a u from uniform[0,1]
                     u = int(torch.rand(1))
                     if u <= count_label_current / count_label_total:
-                        
-                        # calculate cosine similarity between the current example and the examples in the buffer
-                        examples_in_buffer = self.buffer[label] # torch.Size([n, 49, 10])
-                        # flatten the examples_in_buffer
-                        examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
-                        current_example = examples[i] # torch.Size([1, 49, 10])
-                        # flatten the current_example
-                        current_example = current_example.view(1, -1)
-                        # print('examples_in_buffer:', examples_in_buffer.size()) # torch.Size([n, 490])
-                        # print('current_example:', current_example.size()) # torch.Size([1, 490])
-
-                        # Calculate cosine similarity
-                        cos_similarities = F.cosine_similarity(examples_in_buffer.to(self.device), current_example.to(self.device), dim=-1) # torch.Size([n])
-                        # normalize the cosine similarities[-1,1]
-                        cos_similarities = 0.5 * (cos_similarities + 1)
-                        # randomly select an example from the buffer according to the cosine similarity
-                        sample_index = torch.multinomial(cos_similarities, 1).item()
-
-                        # # Calculate Euclidean distance
-                        # euclidean_distances = torch.norm(examples_in_buffer.to(self.device) - current_example.to(self.device), dim=-1)
-                        # # randomly select an example from the buffer according to the euclidean_distances
-                        # sample_index = torch.multinomial(euclidean_distances, 1).item()
-
-                        # sample_index = torch.argmax(cos_similarities)
-                        self.buffer[label][sample_index] = examples[i]
-
+        
+                        # random_index = random.randint(0, self.buffer[label].size(0) - 1)
+                        if self.buffer[label].size(0) > 1:
+                            random_index = random.randint(0, self.buffer[label].size(0) - 1)
+                            self.buffer[label][random_index] = examples[i]
+                        elif self.buffer[label].size(0) == 1:
+                            random_index = 0
+                            self.buffer[label][random_index] = examples[i]
+                        else:
+                            random_index = 0
+                            self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                        # self.buffer[label][random_index] = examples[i]
                         self.num_seen_examples += 1
                         self.class_count_total[label] += 1
                     else:
@@ -1424,12 +1535,18 @@ class Buffer_ClusterECB:
 
         self.full_classes = []
 
-        self.clusters = {}
+        self.old_classes = None
+
         self.fit_flags = {}
 
         print("Buffer initialized")
 
-
+    def update_old_classes(self):
+        self.old_classes = self.buffer.keys()
+    
+    def get_old_classes(self):
+        return self.old_classes
+    
     def get_total_class_count(self):
         """
         Get the total number of examples for each class in the self.buffer[label]
@@ -1630,6 +1747,8 @@ class Buffer_ClusterECB:
                 # labels.append(torch.tensor([label]).to(self.device))
 
         return torch.cat(samples, 0), torch.cat(labels, 0)
+    
+    
         
     
     def get_size(self):
@@ -1722,6 +1841,12 @@ class Buffer_LAECB:
         for label in self.buffer.keys():
             total_class_count += self.buffer[label].size(0)
         return total_class_count
+    
+    def update_old_classes(self):
+        self.old_classes = self.buffer.keys()
+    
+    def get_old_classes(self):
+        return self.old_classes
 
     
     def add_data(self, examples, losses, labels):
@@ -1731,7 +1856,8 @@ class Buffer_LAECB:
         losses: torch.Size([128])
         labels: torch.Size([128])
         """
-
+        # make losses not updated
+        # losses = losses.detach()
         input_size = examples.size(0)
         
         if self.num_seen_examples < self.buffer_size:
@@ -1743,30 +1869,30 @@ class Buffer_LAECB:
                     # examples[i]: torch.Size([1, 49, 10])
                     # loss[i]: torch.Size([1])
                     self.buffer[label] = torch.unsqueeze(examples[i], 0)
-                    self.loss[label] = torch.unsqueeze(losses[i], 0)
+                    self.loss[label] = torch.unsqueeze(losses[i], 0) # torch.Size([1])
+                    # self.loss[label] = torch.unsqueeze(losses[i], 0)
                     # self.buffer[label].append(examples[i])
                     self.class_count[label] = 1
                     self.class_count_total[label] = 1
                 else:
                     # self.buffer[label] = [examples[i]]
                     self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
-                    self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0)
+
+                    self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0) # torch.Size([n])
+                    # self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0)
                     self.class_count[label] += 1
                     self.class_count_total[label] += 1
                 self.num_seen_examples += 1
-                # print('total_class_count:', self.get_total_class_count())
-                # print('class count:', self.get_class_count())
             
         else:
-            
-            
+            # print('self.loss:', self.loss)
+            # print('self.buffer.keys()', self.buffer.keys())
             for i in range(input_size):
                 largest_class_count = max(self.class_count.values())
                 largest_classes = set(cls for cls, count in self.class_count.items() if count == largest_class_count)
-                # largest_classes_tensor = torch.tensor(list(largest_classes)).to(self.device)
 
                 self.full_classes = list(set(self.full_classes).union(largest_classes))
-                # print('full_classes:', self.full_classes)
+
                 label = labels[i].item()
                 if label not in self.buffer.keys():
                     # class is new.
@@ -1785,6 +1911,7 @@ class Buffer_LAECB:
                     # remove the random_index from the buffer
                     self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
                     self.loss[random_class] = torch.cat((self.loss[random_class][:random_index], self.loss[random_class][random_index+1:]), 0)
+                    # self.loss[random_class] = torch.cat((self.loss[random_class][:random_index], self.loss[random_class][random_index+1:]), 0)
 
                     self.num_seen_examples += 1
                     # add class count
@@ -1796,7 +1923,9 @@ class Buffer_LAECB:
                     # class is not in the full classes
 
                     self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+     
                     self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0)
+                    # self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0)
 
                     largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
 
@@ -1816,11 +1945,6 @@ class Buffer_LAECB:
                             random_class = key
                             break
                         
-                    # Randomly select a class from the list
-                    # random_class = random.choice(largest_classes_with_count_larger_than_one) if largest_classes_with_count_larger_than_one else random.choice(list(self.class_count.keys()))
-     
-                    # random_class = random.choice(list(largest_classes))
-                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1) 
                     if self.buffer[random_class].size(0) > 1:
                         random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
                         self.class_count[random_class] -= 1
@@ -1829,7 +1953,9 @@ class Buffer_LAECB:
                         self.class_count[random_class] = 0
                     # remove the random_index from the buffer
                     self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+        
                     self.loss[random_class] = torch.cat((self.loss[random_class][:random_index], self.loss[random_class][random_index+1:]), 0)
+                    # self.loss[random_class] = torch.cat((self.loss[random_class][:random_index], self.loss[random_class][random_index+1:]), 0)
 
                     self.class_count[label] += 1
                     self.num_seen_examples += 1
@@ -1842,15 +1968,16 @@ class Buffer_LAECB:
                     # sample a u from uniform[0,1]
                     u = int(torch.rand(1))
                     if u <= count_label_current / count_label_total:
-        
+   
                         # random_index = random.randint(0, self.buffer[label].size(0) - 1)
                         if self.buffer[label].size(0) > 1:
                             # randomly select an example from the buffer according to the loss distribution
+                            
                             random_index = torch.multinomial(F.softmax(-self.loss[label], dim=0), 1).item()
-                            # random_index = random.randint(0, self.buffer[label].size(0) - 1)
-
                             self.buffer[label][random_index] = examples[i]
                             self.loss[label][random_index] = losses[i]
+
+                                    
                         elif self.buffer[label].size(0) == 1:
                             random_index = 0
                             self.buffer[label][random_index] = examples[i]
@@ -1862,6 +1989,8 @@ class Buffer_LAECB:
                         # self.buffer[label][random_index] = examples[i]
                         self.num_seen_examples += 1
                         self.class_count_total[label] += 1
+
+                        
                     else:
                         pass
             
@@ -1877,11 +2006,12 @@ class Buffer_LAECB:
 
         # self.loss_index is dict and is initialized with keys of self.buffer.keys()
         self.loss_index = {key: [] for key in self.buffer.keys()}
-
+        
         samples = []
         # losses = [] # record the index of where the loss is sampled
         labels = []
         for i in range(input_size):
+            
             label = random.choice(list(self.buffer.keys()))
             # print('label:', label)
             if self.buffer[label].size(0) >= 1:
@@ -1889,29 +2019,89 @@ class Buffer_LAECB:
                 samples.append(self.buffer[label][indices])
                 # losses.append(self.loss[label][indices])
                 self.loss_index[label].append(indices)
+                # print('self.loss_index[label]:', self.loss_index[label])
                 labels.append(torch.tensor([label]).to(self.device))
             else:
                 pass
-                # samples.append(self.buffer[label][0])
-                # # losses.append(self.loss[label])
-                # self.loss_index[label].append(0)
-                # labels.append(torch.tensor([label]).to(self.device))
 
         return torch.cat(samples, 0), torch.cat(labels, 0)
     
-    def update_loss(self, losses):
+    def get_new_data(self):
+        """
+        Get data from the buffer.
+        """
+        # self.buffer[label]
+        # label is the key of the dictionary
+        # input is the value of the dictionary
+        # random select 128 examples from the buffer
+
+        # self.loss_index is dict and is initialized with keys of self.buffer.keys()
+        self.loss_index = {key: [] for key in self.buffer.keys()}
+        
+        # get the classes that is in self.buffer.keys() but not in self.old_classes
+        new_classes = list(set(self.buffer.keys()).difference(set(self.old_classes)))
+        # get total number of samples in the new classes
+        total_samples = 0
+        for label in new_classes:
+            total_samples += self.buffer[label].size(0)
+
+        samples = []
+        # losses = [] # record the index of where the loss is sampled
+        labels = []
+
+        for i in range(total_samples):
+            
+            # label = random.choice(list(self.buffer.keys()))
+            label = random.choice(new_classes)
+            # print('label:', label)
+            if self.buffer[label].size(0) >= 1:
+                indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
+                samples.append(self.buffer[label][indices])
+                # losses.append(self.loss[label][indices])
+                self.loss_index[label].append(indices)
+                # print('self.loss_index[label]:', self.loss_index[label])
+                labels.append(torch.tensor([label]).to(self.device))
+            else:
+                pass
+
+        return torch.cat(samples, 0), torch.cat(labels, 0)
+    
+    
+    def update_loss(self, losses, labels):
         """
         Update the loss of the examples in the buffer according to self.loss_index
+        losses: torch.Size([input_size])
         """
-
-        for label in self.loss_index.keys():
-            # print('losses', losses.shape)
-            # print('self.loss[label]',self.loss[label].shape, 'self.buffer[label].shape', self.buffer[label].shape)
-            # print(f'{label}:',list(self.loss_index[label]))
-
-            for i in range(len(self.loss_index[label])):
-                self.loss[label][self.loss_index[label][i]] = losses[i]
         
+        # print('self.loss_index.keys()', self.loss_index.keys())
+        # print('self.loss.keys()', self.loss)
+
+        for i in range(losses.size(0)):
+            label = labels[i].item()
+            
+            for j in range(len(self.loss_index[label])):
+                if label not in self.loss.keys():
+                    self.loss[label] = torch.unsqueeze(losses[i], 0)
+                else:
+                    self.loss[label][self.loss_index[label][j]] = losses[i]
+        
+
+
+        # print(self.loss_index.keys())
+        # for label in self.loss_index.keys():
+        #     # print('losses', losses.shape)
+        #     # print('self.loss[label]',self.loss[label].shape, 'self.buffer[label].shape', self.buffer[label].shape)
+        #     # print(f'{label}:',list(self.loss_index[label]))
+
+        #     for i in range(len(self.loss_index[label])):
+        #         if label not in self.loss.keys():
+                    
+        #             self.loss[label] = torch.unsqueeze(losses[i], 0)
+        #             print('losses:', self.loss[label])
+        #         else:
+        #             self.loss[label][self.loss_index[label][i]] = losses[i]
+                
+
     
     def get_size(self):
         """
