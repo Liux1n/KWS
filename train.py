@@ -1060,7 +1060,8 @@ class Train():
         # Train model
         best_acc = 0
 
-        if task_id == 'cil_task_0':
+        if task_id == 'cil_task_0' or task_id == 'dil_task_0':
+            print('task_id', task_id)
             num_epochs = self.config['epochs']
             best_ep = -1
             flag_to_stop = False
@@ -1069,7 +1070,7 @@ class Train():
                 data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
                 print("Data length: " + str(len(data))) # 288
                 
-                if task_id == 'cil_task_0':
+                if task_id == 'cil_task_0' or task_id == 'dil_task_0':
                     print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs']))
                 else:
                     print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
@@ -1183,7 +1184,7 @@ class Train():
                 data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
                 print("Data length: " + str(len(data))) # 288
                 
-                if task_id == 'cil_task_0':
+                if task_id == 'cil_task_0' or task_id == 'dil_task_0':
                     print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs']))
                 else:
                     print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))

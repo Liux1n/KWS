@@ -404,19 +404,19 @@ def parameter_generation(args=None, config=None, task_id=None):
                                                     'TBUS', 'TCAR', 'TMETRO']
                 
             if task_id == 'dil_task_0_disjoint':
-                training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING', 'NFIELD', 'NPARK', 'NRIVER', 'OHALLWAY', 'OMEETING', 'OOFFICE']
+                training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC', 'NFIELD', 'NPARK', 'NRIVER', 'TBUS', 'TCAR', 'TMETRO']
                 training_parameters['noise_train'] = ['DKITCHEN'] # not used.
             
             elif task_id == 'dil_task_1_disjoint':
-                training_parameters['noise_test']  = ['PCAFETER', 'PRESTO', 'PSTATION']
+                training_parameters['noise_test']  = ['OHALLWAY', 'OMEETING', 'OOFFICE']
                 training_parameters['noise_train'] = ['DKITCHEN'] # not used.
 
             elif task_id == 'dil_task_2_disjoint':
-                training_parameters['noise_test']  = ['SCAFE', 'SPSQUARE', 'STRAFFIC']
+                training_parameters['noise_test']  = ['DKITCHEN', 'DLIVING', 'DWASHING']
                 training_parameters['noise_train'] = ['DKITCHEN'] # not used.
 
             elif task_id == 'dil_task_3_disjoint':
-                training_parameters['noise_test']  = ['TBUS', 'TCAR', 'TMETRO']
+                training_parameters['noise_test']  = ['PCAFETER', 'PRESTO', 'PSTATION']
                 training_parameters['noise_train'] = ['DKITCHEN'] # not used.
         
 

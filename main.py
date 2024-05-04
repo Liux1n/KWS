@@ -87,12 +87,13 @@ parser.add_argument('--early_stop', action='store_true', help="Enable early_stop
 parser.add_argument('--forgetting', action='store_true', help="Enable forgetting measure.")
 parser.add_argument('--dynamic_loss', action='store_true', help="Enable dynamic_loss.")
 parser.add_argument('--augmentation', action='store_true', help="Enable data augmentation.")
-parser.add_argument('--remark', type=str, default='default_value', help='Remark of the run.')
+parser.add_argument('--remark', type=str, help='Remark of the run.')
 # change number of epochs
-parser.add_argument('--epoch', type=int, default=None, help='Number of epochs for training.')
-parser.add_argument('--epoch_cl', type=int, default=None, help='Number of epochs for continual training.')
-parser.add_argument('--n_clusters', type=int, default=None, help='Number of clusters in ClusterECBRS.')
+parser.add_argument('--epoch', type=int, help='Number of epochs for training.')
+parser.add_argument('--epoch_cl', type=int, help='Number of epochs for continual training.')
+parser.add_argument('--n_clusters', type=int, help='Number of clusters in ClusterECBRS.')
 parser.add_argument('--load_buffer', action='store_true', help="Enable load_buffer.")
+parser.add_argument('--seed', type=int, help='Number of epochs for training.')
 args = parser.parse_args()
 
 
@@ -100,6 +101,10 @@ time_str = time.strftime("%Y%m%d-%H%M%S")
 if args.epoch:
   config['epochs'] = args.epoch
   print('Number of epochs changed to ', args.epoch)
+
+if args.seed:
+  config['seed'] = args.seed
+  print('Seed changed to ', args.seed)
 
 
 # if args.epoch_cl != config['epochs_cl']:
@@ -129,19 +134,22 @@ if args.debug:
 # model_name = 'cil_joint_pretrain_new.pth' # CIL joint
 # model_name = 'cil_LAECBRS_20240502-06335714_base.pth'
 
-model_name = 'cil_LAECBRS_20240503-14264014_acc87.0998475609756.pth' # seed4 LAECBRS base
+# model_name = 'cil_LAECBRS_20240503-14264014_base_seed4.pth' # seed4 LAECBRS base
+# model_name = 'cil_LAECBRS_20240504-10071015_base_seed42.pth' # seed 42
+model_name = 'cil_LAECBRS_20240504-10112315_base_seed5.pth' # seed 5
 
-# model_name = 'dil_base_pretrain_SNR_0dB.pth' # DIL base
-# model_name = 'dil_joint_pretrain_SNR_0dB.pth' # DIL joint
-# model_name = 'dil_base_pretrain_SNR_new.pth'
-# model_name = 'dil_base_pretrain_vol10.pth'
-# model_name = 'dil_base_pretrain_vol15.pth'
+
+
+# model_name = 'dil_base_pretrain_20240504-165645_SNR_-3dB_newNoise.pth'
+
+
+# model_name = 'dil_joint_pretrain_20240504-174944_SNR_-3dB_newNoise.pth'
+# 
 # model_name = 'dil_base_pretrain_20240502-214127_SNR_-10dB_newNoise.pth'
 
-# model_name = 'dil_base_pretrain_20240502-235833_SNR_-20dB_newNoise.pth'
 
-# model_name = 'dil_base_pretrain_20240502-011425_SNR_-10dB.pth'
-# model_name = 'dil_base_pretrain_20240502-081651_SNR_0dB.pth'
+
+
 
 model_path = './new_models/' + model_name 
 
@@ -754,7 +762,149 @@ if args.mode == 'dil':
     torch.save(model.state_dict(), PATH)
     print('Model saved at ', PATH)
   
+    
+  elif args.method == 'LAECBRS':
+     
+    print('Start LAECBRS')
+    tasks = ['dil_task_0','dil_task_1', 'dil_task_2', 'dil_task_3']
+    n_classes = config['n_classes'] + 2 # 35 + 2
+    acc_matrix = np.zeros((4,4)) # acc_matrix[i,j] = acc after training task i on task j
+    acc_done = 0
+    for i, task_id in enumerate(tasks): # i: 0, 1, 2, 3
+
+      training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id)
+      # Dataset generation
+      audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+      audio_processor.divide_data_set(training_parameters, task_id=task_id)
+      train_size = audio_processor.get_size('training')
+      valid_size = audio_processor.get_size('validation')
+      test_size = audio_processor.get_size('testing')
+      print("Dataset split (Train/valid/test): "+ str(train_size) +"/"+str(valid_size) + "/" + str(test_size))
+
+      if i == 0:
+        # initialize memory buffer
+
+        memory_buffer = Buffer_LAECB(buffer_size=config['memory_buffer_size'], batch_size=config['batch_size'], device=device)
+
+        # prepare data
+        data = dataset.AudioGenerator('training', audio_processor, training_parameters, task_id, task = None)
+        
+        # Removing stored inputs and activations
+        remove_txt()
+        print('Training model on dil_task_0...')
+        n_classes = config['n_classes'] + 2
+        model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+        model.to(device)
+        summary(model,(1,49,data_processing_parameters['feature_bin_count']))
+        dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
+        # count_ops(model, dummy_input)
+
+        # Training initialization
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        
+        # start=time.process_time()
+        
+        # training_environment.train(model,task_id=None)
+        # print('Finished Training on GPU in {:.2f} seconds'.format(time.process_time()-start))
+        start_time_training = time.time()
+        if args.load_buffer:
+          # model_ckpt = 'cil_LAECBRS_20240503-14264014_acc87.0998475609756.pth' # seed 4
+          model_ckpt = 'cil_LAECBRS_20240504-10071015_base_seed42.pth' # seed 42
+          model_ckpt_path = './new_models/' + model_ckpt
+          model.load_state_dict(torch.load(model_ckpt_path, map_location=torch.device('cuda')))
+          # buffer_name = 'buffer_cil_LAECBRS_20240503-142640.pth' # seed 4
+          buffer_name = 'buffer_cil_LAECBRS_20240504-100710.pth' # seed 42
+          buffer_path = './buffer_state/' + buffer_name
+          buffer_state = torch.load(buffer_path)
+          # print(buffer_state)
+          print('Loaded buffer state from:', buffer_path)
+          # print('buffer state:' , buffer_state)
+          if buffer_path is not None:
+            buffer_ckpt = torch.load(buffer_path)
+            memory_buffer.load_buffer(buffer_ckpt)
+          else: 
+            print('No buffer saved')
+            break
+        else:
+          model_path, memory_buffer = training_environment.ER_LAECB(model, memory_buffer, task_id)
+          model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))
+          num_seen_examples, buffer, loss, loss_index, class_count, class_count_total, full_classes = memory_buffer.get_entire_buffer()
+
+          # make them a big dictionary
+          buffer_state = {'num_seen_examples': num_seen_examples, 
+                          'buffer': buffer, 
+                          'loss': loss, 
+                          'loss_index': loss_index, 
+                          'class_count': class_count, 
+                          'class_count_total': class_count_total, 
+                          'full_classes': full_classes}
+          # save buffer_state
+          timestr = time.strftime("%Y%m%d-%H%M%S")
+          buffer_name = 'buffer_'+ args.mode + '_' + args.method + '_' + timestr + '.pth'
+          buffer_path = './buffer_state/' + buffer_name
+          torch.save(buffer_state, buffer_path)
+          print(f'Buffer state saved at {buffer_path} as {buffer_name}')
+
+          print('Finished Training on GPU in {:.2f} seconds'.format(time.time()-start_time_training))
+
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+
+
+
+      else:
+        training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+        print(f'Conintual Training on {task_id}...')
+        # # reset num_seen_examples in memory buffer
+        # memory_buffer.reset_num_seen_examples()
+        model, memory_buffer = training_environment.ER_LAECB(model, memory_buffer, task_id)
+        
+        acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+        print(f'Test Accuracy of {task_id}: ', acc_task)
+        if args.wandb:
+            wandb.log({f'ACC_{task_id}': acc_task})
+      
+      if args.forgetting:
+        print('Testing on Disjoint Tasks...')
+        del audio_processor
+        del training_environment
+        task_id_disjoint = ['dil_task_0_disjoint','dil_task_1_disjoint', 'dil_task_2_disjoint', 'dil_task_3_disjoint']
+        for j in range(i+1): 
+          training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id_disjoint[j])
+          # Dataset generation
+          audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
+          training_environment = Train(audio_processor, training_parameters, model, device, args, config)
+          # print (f"Testing Accuracy on {task_id_disjoint}...")
+          acc_task = training_environment.validate(model, mode='testing', batch_size=-1, task_id=None, statistics=False)
+          acc_matrix[i,j] = acc_task
+          del audio_processor
+          del training_environment
+          acc_done += 1
+          print(f'Finished Testing for Acc Matrix {acc_done}/10')
+      else:
+        del audio_processor
+        del training_environment
+
+    if args.forgetting:
+      print('acc_matrix:', acc_matrix)
+
+      average_forgetting = task_average_forgetting(acc_matrix)
+
+      print("Task-average Forgetting:", average_forgetting)
+      if args.wandb:
+        wandb.log({'Task-average Forgetting': average_forgetting})
+
+    # Save the model
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    model_name = args.mode + '_' + args.method + '_' + timestr + '.pth'
+    PATH = './models/' + model_name
+    torch.save(model.state_dict(), PATH)
+    print('Model saved at ', PATH)
   
+
+
   elif args.method == 'noise_data_test':
      
     print('Start noise_data_test')
@@ -1868,10 +2018,12 @@ elif args.mode == 'cil':
         # start=time.process_time()
         start_time_training = time.time()
         if args.load_buffer:
-          model_ckpt = 'cil_LAECBRS_20240503-14264014_acc87.0998475609756.pth'
+          # model_ckpt = 'cil_LAECBRS_20240503-14264014_acc87.0998475609756.pth' # seed 4
+          model_ckpt = 'cil_LAECBRS_20240504-10071015_base_seed42.pth' # seed 42
           model_ckpt_path = './new_models/' + model_ckpt
           model.load_state_dict(torch.load(model_ckpt_path, map_location=torch.device('cuda')))
-          buffer_name = 'buffer_cil_LAECBRS_20240503-142640.pth'
+          # buffer_name = 'buffer_cil_LAECBRS_20240503-142640.pth' # seed 4
+          buffer_name = 'buffer_cil_LAECBRS_20240504-100710.pth' # seed 42
           buffer_path = './buffer_state/' + buffer_name
           buffer_state = torch.load(buffer_path)
           # print(buffer_state)
@@ -1883,6 +2035,7 @@ elif args.mode == 'cil':
           else: 
             print('No buffer saved')
             break
+
         else:
           model_path, memory_buffer = training_environment.ER_LAECB(model, memory_buffer, task_id)
           model.load_state_dict(torch.load(model_path, map_location=torch.device('cuda')))

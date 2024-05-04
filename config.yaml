@@ -9,13 +9,13 @@ volume_ratio: 1 # lower means noise volume is higher
 # hyperparameters
 epochs: 200 # pretraining epochs
 epochs_CL: 16 # Continual Learning epochs
+
 n_classes: 35
-# n_classes: 12
 batch_size: 128
 patience: 10
 # data processing
 new_data_ratio: 0.5
-snr: -20 # dB
+snr: -3 # dB
 n_batches_dil: 110
 silence_percentage: 10.0
 unknown_percentage: 10.0
@@ -28,7 +28,7 @@ new_data_ratio: 0.5
 n_clusters: 10
 alpha: 0.5
 # seed: 59185
-seed: 3
+seed: 4
 # wandb
 project_name: 'KWS'
 
