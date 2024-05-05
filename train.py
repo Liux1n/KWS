@@ -299,7 +299,7 @@ class Train():
 
         return model
     
-    def ER_NRS(self, 
+    def ER(self, 
                 model, 
                 memory_buffer, 
                 task_id = None,):
@@ -344,7 +344,7 @@ class Train():
                     memory_buffer.add_data(inputs, labels)
                 # check input shape
                 
-                if self.args.method == 'ER_NRS':
+                if self.args.method == 'NRS':
                     samples_inputs, samples_labels = memory_buffer.get_data()
                 else:
                     samples_inputs, samples_labels = memory_buffer.get_data(input_size)
@@ -1061,119 +1061,234 @@ class Train():
         best_acc = 0
 
         if task_id == 'cil_task_0' or task_id == 'dil_task_0':
-            print('task_id', task_id)
-            num_epochs = self.config['epochs']
-            best_ep = -1
-            flag_to_stop = False
-            for epoch in range(0, num_epochs):
 
-                data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
-                print("Data length: " + str(len(data))) # 288
-                
-                if task_id == 'cil_task_0' or task_id == 'dil_task_0':
-                    print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs']))
-                else:
-                    print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
+            if self.args.load_model:
+                print('Training from pre-trained model')
+                print('task_id', task_id)
+                num_epochs = 1
+                best_ep = -1
+                flag_to_stop = False
+                for epoch in range(0, num_epochs):
 
-                model.train()
-                self.scheduler.step()
+                    data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
+                    print("Data length: " + str(len(data))) # 288
 
-                running_loss = 0.0
-                total = 0
-                correct = 0   
+                    print("Epoch: " + str(epoch+1) +"/1")
+                    model.train()
+                    self.scheduler.step()
 
-                # num_iter = 20 if self.training_parameters['debug'] else len(data)
-                num_iter = len(data)
-                num_print = 20
-                
+                    running_loss = 0.0
+                    total = 0
+                    correct = 0   
 
-                for minibatch in range(num_iter): 
-                # for minibatch in range(1): 
-
-                    inputs, labels, _ = data[0]
-                    inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
-                    labels = torch.Tensor(labels).to(self.device).long()
-                    if inputs.size(0) == 0:
-                        break
-                    self.optimizer.zero_grad()
-
-                    # Train, compute loss, update optimizer
-                    model = model.to(self.device)
-                    outputs = F.softmax(model(inputs), dim=1)
-                    loss = self.criterion(outputs, labels) # torch.Size([256])
-
-                    temp_loss = loss.clone().detach() # torch.Size([256])
-                    loss = loss.mean()
-                    loss.backward()
-                    self.optimizer.step()
-
-                    if epoch == num_epochs - 1 or flag_to_stop:
-    
-                        memory_buffer.add_data(inputs, temp_loss, labels)
-
-                        if minibatch >= self.config['memory_buffer_size'] / self.config['batch_size']:
-                            model.eval()
-                            with torch.no_grad():
-                                samples_inputs, samples_labels = memory_buffer.get_data(self.config['memory_buffer_size'])
-                                samples_inputs = samples_inputs.to(self.device)
-                                samples_labels = samples_labels.to(self.device).long()
-
-                                # Use the model copy to compute logits
-                                outputs_samples = F.softmax(model(samples_inputs), dim=1)
-
-                                # Compute loss using the logits from the model copy
-                                loss_samples = self.criterion(outputs_samples, samples_labels).clone().detach()
-
-                                memory_buffer.update_loss(loss_samples, samples_labels)
-                                # print('Loss updated at iteration:', minibatch)
-                            model.train()
-
-
-                    running_loss += loss.item()
-                    _, predicted = torch.max(outputs.data, 1)
-                    total += labels.size(0)
-                    correct += (predicted == labels).sum().item()
+                    # num_iter = 20 if self.training_parameters['debug'] else len(data)
+                    num_iter = len(data)
+                    num_print = 20
                     
-                    if self.args.wandb:
-                        wandb.log({'Pre-train loss': loss.item(), 'accuracy': 100 * correct / total})   
 
-                    # Print information every 50 minibatches
-                    if minibatch % num_print == 0: 
-                        print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
-                        running_loss = 0.0
+                    for minibatch in range(num_iter): 
+                    # for minibatch in range(1): 
 
+                        inputs, labels, _ = data[0]
+                        inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                        labels = torch.Tensor(labels).to(self.device).long()
+                        if inputs.size(0) == 0:
+                            break
+                        self.optimizer.zero_grad()
 
-                tmp_acc = self.validate(model, 'validation', task_id = task_id)
-                if self.args.early_stop:
-                    if flag_to_stop == True:
-                        print('Early stop at epoch: ', epoch)
-                        break
-                    # Save best performing network
-                    if (tmp_acc > best_acc):
-                        best_acc = tmp_acc
-                        best_ep  = epoch
-                        best_state_dict = model.state_dict()
+                        # Train, compute loss, update optimizer
+                        model = model.to(self.device)
+                        outputs = F.softmax(model(inputs), dim=1)
+                        loss = self.criterion(outputs, labels) # torch.Size([256])
 
-                    patience = self.config['patience']
-                    
-                    if (epoch >= best_ep + patience):
-                        flag_to_stop = True
-                        
-                else:
-                    best_state_dict = model.state_dict()
+                        temp_loss = loss.clone().detach() # torch.Size([256])
+                        loss = loss.mean()
+                        loss.backward()
+                        self.optimizer.step()
+
+                        if epoch == num_epochs - 1 or flag_to_stop:
         
+                            memory_buffer.add_data(inputs, temp_loss, labels)
 
-            timestr = time.strftime("%Y%m%d-%H%M%S")
-            if self.args.early_stop:
-                model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
-            else:
-                model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + '.pth'
-            model_path = './new_models/' + model_name
+                            if minibatch >= self.config['memory_buffer_size'] / self.config['batch_size']:
+                                model.eval()
+                                with torch.no_grad():
+                                    samples_inputs, samples_labels = memory_buffer.get_data(self.config['memory_buffer_size'])
+                                    samples_inputs = samples_inputs.to(self.device)
+                                    samples_labels = samples_labels.to(self.device).long()
 
-            torch.save(best_state_dict, model_path)
-            print('model saved at: ', model_path)
+                                    # Use the model copy to compute logits
+                                    outputs_samples = F.softmax(model(samples_inputs), dim=1)
 
-            return model_path, memory_buffer
+                                    # Compute loss using the logits from the model copy
+                                    loss_samples = self.criterion(outputs_samples, samples_labels).clone().detach()
+
+                                    memory_buffer.update_loss(loss_samples, samples_labels)
+                                    # print('Loss updated at iteration:', minibatch)
+                                model.train()
+
+
+                        running_loss += loss.item()
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += labels.size(0)
+                        correct += (predicted == labels).sum().item()
+                        
+                        if self.args.wandb:
+                            wandb.log({'Pre-train loss': loss.item(), 'accuracy': 100 * correct / total})   
+
+                        # Print information every 50 minibatches
+                        if minibatch % num_print == 0: 
+                            print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
+                            running_loss = 0.0
+
+
+                    tmp_acc = self.validate(model, 'validation', task_id = task_id)
+                    if self.args.early_stop:
+                        if flag_to_stop == True:
+                            print('Early stop at epoch: ', epoch)
+                            break
+                        # Save best performing network
+                        if (tmp_acc > best_acc):
+                            best_acc = tmp_acc
+                            best_ep  = epoch
+                            best_state_dict = model.state_dict()
+
+                        patience = self.config['patience']
+                        
+                        if (epoch >= best_ep + patience):
+                            flag_to_stop = True
+                            
+                    else:
+                        best_state_dict = model.state_dict()
+            
+
+                timestr = time.strftime("%Y%m%d-%H%M%S")
+                if self.args.early_stop:
+                    model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
+                else:
+                    model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + '.pth'
+                model_path = './new_models/' + model_name
+
+                torch.save(best_state_dict, model_path)
+                print('model saved at: ', model_path)
+
+                return model_path, memory_buffer
+            
+            else :
+                print('Training from scratch')
+                print('task_id', task_id)
+                num_epochs = self.config['epochs']
+                best_ep = -1
+                flag_to_stop = False
+                for epoch in range(0, num_epochs):
+
+                    data = dataset.AudioGenerator('training', self.audio_processor, self.training_parameters, task_id, task = None)
+                    print("Data length: " + str(len(data))) # 288
+                    
+                    if task_id == 'cil_task_0' or task_id == 'dil_task_0':
+                        print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs']))
+                    else:
+                        print("Epoch: " + str(epoch+1) +"/" + str(self.config['epochs_CL']))
+
+                    model.train()
+                    self.scheduler.step()
+
+                    running_loss = 0.0
+                    total = 0
+                    correct = 0   
+
+                    # num_iter = 20 if self.training_parameters['debug'] else len(data)
+                    num_iter = len(data)
+                    num_print = 20
+                    
+
+                    for minibatch in range(num_iter): 
+                    # for minibatch in range(1): 
+
+                        inputs, labels, _ = data[0]
+                        inputs = torch.Tensor(inputs[:,None,:,:]).to(self.device)
+                        labels = torch.Tensor(labels).to(self.device).long()
+                        if inputs.size(0) == 0:
+                            break
+                        self.optimizer.zero_grad()
+
+                        # Train, compute loss, update optimizer
+                        model = model.to(self.device)
+                        outputs = F.softmax(model(inputs), dim=1)
+                        loss = self.criterion(outputs, labels) # torch.Size([256])
+
+                        temp_loss = loss.clone().detach() # torch.Size([256])
+                        loss = loss.mean()
+                        loss.backward()
+                        self.optimizer.step()
+
+                        if epoch == num_epochs - 1 or flag_to_stop:
+        
+                            memory_buffer.add_data(inputs, temp_loss, labels)
+
+                            if minibatch >= self.config['memory_buffer_size'] / self.config['batch_size']:
+                                model.eval()
+                                with torch.no_grad():
+                                    samples_inputs, samples_labels = memory_buffer.get_data(self.config['memory_buffer_size'])
+                                    samples_inputs = samples_inputs.to(self.device)
+                                    samples_labels = samples_labels.to(self.device).long()
+
+                                    # Use the model copy to compute logits
+                                    outputs_samples = F.softmax(model(samples_inputs), dim=1)
+
+                                    # Compute loss using the logits from the model copy
+                                    loss_samples = self.criterion(outputs_samples, samples_labels).clone().detach()
+
+                                    memory_buffer.update_loss(loss_samples, samples_labels)
+                                    # print('Loss updated at iteration:', minibatch)
+                                model.train()
+
+
+                        running_loss += loss.item()
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += labels.size(0)
+                        correct += (predicted == labels).sum().item()
+                        
+                        if self.args.wandb:
+                            wandb.log({'Pre-train loss': loss.item(), 'accuracy': 100 * correct / total})   
+
+                        # Print information every 50 minibatches
+                        if minibatch % num_print == 0: 
+                            print('[%3d / %3d] loss: %.3f  accuracy: %.3f' % (minibatch + 1, num_iter, running_loss / num_print, 100 * correct / total))
+                            running_loss = 0.0
+
+
+                    tmp_acc = self.validate(model, 'validation', task_id = task_id)
+                    if self.args.early_stop:
+                        if flag_to_stop == True:
+                            print('Early stop at epoch: ', epoch)
+                            break
+                        # Save best performing network
+                        if (tmp_acc > best_acc):
+                            best_acc = tmp_acc
+                            best_ep  = epoch
+                            best_state_dict = model.state_dict()
+
+                        patience = self.config['patience']
+                        
+                        if (epoch >= best_ep + patience):
+                            flag_to_stop = True
+                            
+                    else:
+                        best_state_dict = model.state_dict()
+            
+
+                timestr = time.strftime("%Y%m%d-%H%M%S")
+                if self.args.early_stop:
+                    model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + str(best_ep) + '_acc' + str(best_acc) + '.pth'
+                else:
+                    model_name = model_name = self.args.mode + '_' + self.args.method + '_' + timestr + '.pth'
+                model_path = './new_models/' + model_name
+
+                torch.save(best_state_dict, model_path)
+                print('model saved at: ', model_path)
+
+                return model_path, memory_buffer
 
         else:
             num_epochs = 1 if self.args.debug else self.config['epochs_CL']
