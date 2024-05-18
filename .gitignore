@@ -30,6 +30,8 @@ models/
 new_models/
 methods/
 buffer_state/
+images/
+audio/
 # wandb
 wandb/
 

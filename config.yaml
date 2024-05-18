@@ -15,7 +15,7 @@ batch_size: 128
 patience: 10
 # data processing
 new_data_ratio: 0.5
-snr: -3 # dB
+snr: -8 # dB
 n_batches_dil: 110
 silence_percentage: 10.0
 unknown_percentage: 10.0
@@ -28,7 +28,7 @@ new_data_ratio: 0.5
 n_clusters: 10
 alpha: 0.5
 # seed: 59185
-seed: 4
+seed: 5
 # wandb
 project_name: 'KWS'
 

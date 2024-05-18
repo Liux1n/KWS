@@ -199,7 +199,7 @@ class AudioProcessor(object):
       wav_file = torch.Tensor(np.array([sf_loader]))
 
       wav_path = str(wav_path)
-      noise_type = wav_path.split('/')[6] #  TODO: index should be adapted based on the path
+      noise_type = wav_path.split('/')[7] #  TODO: index should be adapted based on the path
       # noise_type = wav_path.split('\\')[4]
 
       if (training_parameters['noise_dataset'] == 'demand'):
@@ -210,6 +210,7 @@ class AudioProcessor(object):
             self.background_noise_test.append(wav_file[0])
             self.background_noise_test_name.append(noise_type)
         if ([noise for noise in training_parameters['noise_train'] if noise in wav_path]):
+          # print("Noise type: ", noise_type)
           if ("ch15" not in wav_path and "ch16" not in wav_path):
             self.background_noise.append(wav_file[0])
             self.background_noise_name.append(noise_type)
@@ -218,7 +219,7 @@ class AudioProcessor(object):
         self.background_noise_test.append(wav_file[0])
         self.background_noise_name.append(noise_type)
         self.background_noise_test_name.append(noise_type)
-    # print('Loaded background noises:', len(self.background_noise_test))
+
 
     if not self.background_noise:
       raise Exception('No background wav files were found in ' + search_path)
@@ -318,23 +319,6 @@ class AudioProcessor(object):
 
         else:
           pass
-      # elif training_parameters['mode'] == 'dil':
-      #   if task_id == 'dil_task_0':
-      #     pass
-      #   elif task_id == 'dil_task_1':
-      #     n_samples = training_parameters['batch_size']*80
-      #     # randomly select n_samples from the training set
-      #     candidates = np.random.choice(candidates, n_samples, replace=False) # TODO: fix this! no random. Do it at init of audioprocessor
-      #   elif task_id == 'dil_task_2':
-      #     n_samples = training_parameters['batch_size']*125
-      #     # randomly select n_samples from the training set
-      #     candidates = np.random.choice(candidates, n_samples, replace=False)
-      #   elif task_id == 'dil_task_3':
-      #     n_samples = training_parameters['batch_size']*108
-      #     # randomly select n_samples from the training set
-      #     candidates = np.random.choice(candidates, n_samples, replace=False)
-
-
 
     elif mode == 'validation' or mode == 'testing':
         

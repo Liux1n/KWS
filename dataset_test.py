@@ -91,12 +91,14 @@ class AudioProcessor(object):
       self.data_processing_parameters = data_processing_parameters
 
 
+
   def generate_data_dictionary(self, training_parameters):
 
     # For each data set, generate a dictionary containing the path to each file, its label, and its speaker.
     # Make sure the shuffling and picking of unknowns is deterministic.
     random.seed(training_parameters['seed'])
     np.random.seed(training_parameters['seed'])
+    
     wanted_words_index = {}
 
     for index, wanted_word in enumerate(training_parameters['wanted_words']):
@@ -227,12 +229,41 @@ class AudioProcessor(object):
     # Compute data set size
 
     return len(self.data_set[mode])
+  
+  def divide_data_set(self, training_parameters, task_id):
+    n_samples_task_0 = training_parameters['batch_size']*352
+    n_samples_task_1 = training_parameters['batch_size']*80
+    n_samples_task_2 = training_parameters['batch_size']*125
+    n_samples_task_3 = training_parameters['batch_size']*108
+    if task_id == 'dil_task_0':
+      # take first n_samples from the training set as training set
+      # start_idx = 0
+      end_idx = n_samples_task_0
+      self.data_set['training'] = self.data_set['training'][:end_idx]
+    elif task_id == 'dil_task_1':
+      # take the next n_samples from the training set as training set
+      start_idx = n_samples_task_0+1
+      end_idx = n_samples_task_0 + n_samples_task_1
+      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+    elif task_id == 'dil_task_2':
+      # take the next n_samples from the training set as training set
+      start_idx = n_samples_task_0 + n_samples_task_1 + 1
+      end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2
+      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+    elif task_id == 'dil_task_3':
+      # take the next n_samples from the training set as training set
+      start_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + 1
+      end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + n_samples_task_3
+      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+    
 
 
   def get_data(self, mode, training_parameters, task_id, task, offset):
     # Prepare and return data (utterances and labels) for inference
     # Pick one of the partitions to choose samples from
     candidates = self.data_set[mode] # TODO: modify this for CIL
+    
+    snr = training_parameters['snr']
     # {'label': 'two', 'file': '/usr/scratch/sassauna2/sem24f39/GSC/dataset/two/caf9fceb_nohash_1.wav', 'speaker': 'caf9fceb'}
     # target_words='yes,no,up,down,left,right,on,off,stop,go,'
                     #2  ,3 ,4 ,5   ,6   ,7    ,8 ,9  ,10  ,11
@@ -247,44 +278,69 @@ class AudioProcessor(object):
     # 31 to 35: three, tree, two, visual, wow, zero
 
     if mode == 'training':
+      if training_parameters['mode'] == 'cil':
+        if task_id == 'cil_task_0': # 1 to 17
+          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          # labels = set(['yes','no'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      if task_id == 'cil_task_0': # 1 to 17
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        elif task_id == 'cil_task_1': # 18 to 23
+          labels = set(['follow','forward','four','happy','house','learn'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif task_id == 'cil_task_1': # 18 to 23
-        labels = set(['follow','forward','four','happy','house','learn'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        elif task_id == 'cil_task_2': # 24 to 29
+          labels = set(['marvin','nine','one','seven','sheila','six'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif task_id == 'cil_task_2': # 24 to 29
-        labels = set(['marvin','nine','one','seven','sheila','six'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        elif task_id == 'cil_task_3': # 30 to 35
+          labels = set(['three','tree','two','visual','wow','zero'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif task_id == 'cil_task_3': # 30 to 35
-        labels = set(['three','tree','two','visual','wow','zero'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        elif task_id == 'cil_joint': # keep all the words
+          pass
 
-      elif task_id == 'cil_joint': # keep all the words
-        pass
+        
+        elif task_id == 'cil_task_0_disjoint':
+          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+        
+        elif task_id == 'cil_task_1_disjoint':
+          labels = set(['follow','forward','four','happy','house','learn'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif task_id == 'cil_task_2_disjoint':
+          labels = set(['marvin','nine','one','seven','sheila','six'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif task_id == 'cil_task_3_disjoint':
+          labels = set(['three','tree','two','visual','wow','zero'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        else:
+          pass
       
-      elif task_id == 'cil_task_0_disjoint':
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      elif training_parameters['mode'] == 'dil':
+        if task_id == 'dil_test':
+          labels = set(['zero'])
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
       
-      elif task_id == 'cil_task_1_disjoint':
-        labels = set(['follow','forward','four','happy','house','learn'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+      # elif training_parameters['mode'] == 'dil':
+      #   if task_id == 'dil_task_0':
+      #     pass
+      #   elif task_id == 'dil_task_1':
+      #     n_samples = training_parameters['batch_size']*80
+      #     # randomly select n_samples from the training set
+      #     candidates = np.random.choice(candidates, n_samples, replace=False) # TODO: fix this! no random. Do it at init of audioprocessor
+      #   elif task_id == 'dil_task_2':
+      #     n_samples = training_parameters['batch_size']*125
+      #     # randomly select n_samples from the training set
+      #     candidates = np.random.choice(candidates, n_samples, replace=False)
+      #   elif task_id == 'dil_task_3':
+      #     n_samples = training_parameters['batch_size']*108
+      #     # randomly select n_samples from the training set
+      #     candidates = np.random.choice(candidates, n_samples, replace=False)
 
-      elif task_id == 'cil_task_2_disjoint':
-        labels = set(['marvin','nine','one','seven','sheila','six'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
-      elif task_id == 'cil_task_3_disjoint':
-        labels = set(['three','tree','two','visual','wow','zero'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-      else:
-        pass
 
     elif mode == 'validation' or mode == 'testing':
         
@@ -329,6 +385,7 @@ class AudioProcessor(object):
       else:
         pass
 
+
     # print('Candidates:', candidates)
 
     if training_parameters['batch_size'] == -1:
@@ -337,7 +394,8 @@ class AudioProcessor(object):
       samples_number = max(0, min(training_parameters['batch_size'], len(candidates) - offset))
 
     # Create a data placeholder
-    data_placeholder = np.zeros((samples_number, self.data_processing_parameters['spectrogram_length'],self.data_processing_parameters['feature_bin_count']),dtype='float32' )
+    # data_placeholder = np.zeros((samples_number, self.data_processing_parameters['spectrogram_length'],self.data_processing_parameters['feature_bin_count']),dtype='float32' )
+    data_placeholder = np.zeros((samples_number, 16000),dtype='float32' )
     labels_placeholder = np.zeros(samples_number)
     noises_placeholder = np.zeros(samples_number)
 
@@ -461,8 +519,25 @@ class AudioProcessor(object):
         # Mix in background noise
         background_mul = torch.mul(torch.Tensor(data_augmentation_parameters['background_noise'][:,0]),data_augmentation_parameters['background_volume']) 
         power_background = torch.sum(torch.pow(background_mul,2))
+
+        # normalize the SNR to snr above
+        beta = torch.sqrt(power_foreground / power_background) * 10 ** (-snr / 20)
+        # beta = torch.sqrt(power_foreground / power_background)
         
-        SNR = 10 * np.log10(power_foreground / power_background)
+        if power_background != 0:
+          # print(f"Beta: ", beta)
+          background_mul = background_mul * beta
+          # sliced_foreground = sliced_foreground / beta
+        else:
+          pass
+
+        # # power of the background noise
+        # power_background = torch.sum(torch.pow(background_mul,2))
+        # # get new SNR
+        # if power_background != 0:
+        #   print(f"power ratio: ", power_foreground / power_background)
+        # else:
+        #   print("power_foreground: ", power_foreground, ". power_background: ", power_background)
 
         if use_background:
           background_add = torch.add(background_mul, sliced_foreground)
@@ -470,16 +545,17 @@ class AudioProcessor(object):
           background_add = sliced_foreground
 
         # Compute MFCCs - PyTorch
-        melkwargs={ 'n_fft':1024, 'win_length':self.data_processing_parameters['window_size_samples'], 'hop_length':self.data_processing_parameters['window_stride_samples'],
-               'f_min':20, 'f_max':4000, 'n_mels':40}
-        mfcc_transformation = torchaudio.transforms.MFCC(n_mfcc=self.data_processing_parameters['feature_bin_count'], sample_rate=self.data_processing_parameters['desired_samples'], melkwargs=melkwargs, log_mels=True, norm='ortho')
+        # melkwargs={ 'n_fft':1024, 'win_length':self.data_processing_parameters['window_size_samples'], 'hop_length':self.data_processing_parameters['window_stride_samples'],
+        #        'f_min':20, 'f_max':4000, 'n_mels':40}
+        # mfcc_transformation = torchaudio.transforms.MFCC(n_mfcc=self.data_processing_parameters['feature_bin_count'], sample_rate=self.data_processing_parameters['desired_samples'], melkwargs=melkwargs, log_mels=True, norm='ortho')
         # data = mfcc_transformation(background_add)
-
-        data = SNR
-
         # data_placeholder[i - offset] = data[:,:self.data_processing_parameters['spectrogram_length']].numpy().transpose()
-        data_placeholder[i - offset] = SNR
-        
+
+        # print('Background add:', background_add.numpy().shape) # (16000,)
+
+        data_placeholder[i - offset] = background_add.numpy()
+
+
         # Compute MFCCs - TensorFlow (matching C-based implementation)
         # tf_data = tf.convert_to_tensor(background_add.numpy(), dtype=tf.float32)
         # tf_stfts = tf.signal.stft(tf_data, frame_length=self.data_processing_parameters['window_size_samples'], frame_step=self.data_processing_parameters['window_stride_samples'], fft_length=1024)
@@ -530,11 +606,11 @@ class AudioGenerator(torch.utils.data.Dataset):
           training_parameters['background_volume'] = 0
           training_parameters['time_shift_samples'] = 0
         self.training_parameters = training_parameters
-
         # Preparing data for ODDA
         self.position = 0
         self.task = task
         self.task_id = task_id
+
 
 
     def __len__(self):
