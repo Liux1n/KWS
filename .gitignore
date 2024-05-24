@@ -31,6 +31,7 @@ new_models/
 methods/
 buffer_state/
 images/
+images_dil/
 audio/
 # wandb
 wandb/

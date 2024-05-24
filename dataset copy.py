@@ -89,6 +89,7 @@ class AudioProcessor(object):
       self.generate_background_noise(training_parameters)
       self.generate_data_dictionary(training_parameters)
       self.data_processing_parameters = data_processing_parameters
+      self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 
@@ -199,7 +200,7 @@ class AudioProcessor(object):
       wav_file = torch.Tensor(np.array([sf_loader]))
 
       wav_path = str(wav_path)
-      noise_type = wav_path.split('/')[6] #  TODO: index should be adapted based on the path
+      noise_type = wav_path.split('/')[7] #  TODO: index should be adapted based on the path
       # noise_type = wav_path.split('\\')[4]
 
       if (training_parameters['noise_dataset'] == 'demand'):
@@ -210,6 +211,7 @@ class AudioProcessor(object):
             self.background_noise_test.append(wav_file[0])
             self.background_noise_test_name.append(noise_type)
         if ([noise for noise in training_parameters['noise_train'] if noise in wav_path]):
+          # print("Noise type: ", noise_type)
           if ("ch15" not in wav_path and "ch16" not in wav_path):
             self.background_noise.append(wav_file[0])
             self.background_noise_name.append(noise_type)
@@ -218,7 +220,7 @@ class AudioProcessor(object):
         self.background_noise_test.append(wav_file[0])
         self.background_noise_name.append(noise_type)
         self.background_noise_test_name.append(noise_type)
-    # print('Loaded background noises:', len(self.background_noise_test))
+
 
     if not self.background_noise:
       raise Exception('No background wav files were found in ' + search_path)
@@ -318,29 +320,6 @@ class AudioProcessor(object):
 
         else:
           pass
-      
-      elif training_parameters['mode'] == 'dil':
-        if task_id == 'dil_test':
-          labels = set(['zero'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-      
-      # elif training_parameters['mode'] == 'dil':
-      #   if task_id == 'dil_task_0':
-      #     pass
-      #   elif task_id == 'dil_task_1':
-      #     n_samples = training_parameters['batch_size']*80
-      #     # randomly select n_samples from the training set
-      #     candidates = np.random.choice(candidates, n_samples, replace=False) # TODO: fix this! no random. Do it at init of audioprocessor
-      #   elif task_id == 'dil_task_2':
-      #     n_samples = training_parameters['batch_size']*125
-      #     # randomly select n_samples from the training set
-      #     candidates = np.random.choice(candidates, n_samples, replace=False)
-      #   elif task_id == 'dil_task_3':
-      #     n_samples = training_parameters['batch_size']*108
-      #     # randomly select n_samples from the training set
-      #     candidates = np.random.choice(candidates, n_samples, replace=False)
-
-
 
     elif mode == 'validation' or mode == 'testing':
         
@@ -394,10 +373,10 @@ class AudioProcessor(object):
       samples_number = max(0, min(training_parameters['batch_size'], len(candidates) - offset))
 
     # Create a data placeholder
-    # data_placeholder = np.zeros((samples_number, self.data_processing_parameters['spectrogram_length'],self.data_processing_parameters['feature_bin_count']),dtype='float32' )
-    data_placeholder = np.zeros((samples_number, 16000),dtype='float32' )
+    data_placeholder = np.zeros((samples_number, self.data_processing_parameters['spectrogram_length'],self.data_processing_parameters['feature_bin_count']),dtype='float32' )
     labels_placeholder = np.zeros(samples_number)
-    noises_placeholder = np.zeros(samples_number)
+    # noises_placeholder = np.zeros(samples_number)
+    noises_placeholder = [''] * samples_number
 
     # Required for noise analysis
     if (training_parameters['noise_mode'] == 'nlkws'):
@@ -517,7 +496,7 @@ class AudioProcessor(object):
         # get the power of sliced foreground
         power_foreground = torch.sum(torch.pow(sliced_foreground,2))
         # Mix in background noise
-        background_mul = torch.mul(torch.Tensor(data_augmentation_parameters['background_noise'][:,0]),data_augmentation_parameters['background_volume']) 
+        background_mul = torch.mul(torch.Tensor(data_augmentation_parameters['background_noise'][:,0]),data_augmentation_parameters['background_volume'])
         power_background = torch.sum(torch.pow(background_mul,2))
 
         # normalize the SNR to snr above
@@ -527,7 +506,6 @@ class AudioProcessor(object):
         if power_background != 0:
           # print(f"Beta: ", beta)
           background_mul = background_mul * beta
-          # sliced_foreground = sliced_foreground / beta
         else:
           pass
 
@@ -545,16 +523,11 @@ class AudioProcessor(object):
           background_add = sliced_foreground
 
         # Compute MFCCs - PyTorch
-        # melkwargs={ 'n_fft':1024, 'win_length':self.data_processing_parameters['window_size_samples'], 'hop_length':self.data_processing_parameters['window_stride_samples'],
-        #        'f_min':20, 'f_max':4000, 'n_mels':40}
-        # mfcc_transformation = torchaudio.transforms.MFCC(n_mfcc=self.data_processing_parameters['feature_bin_count'], sample_rate=self.data_processing_parameters['desired_samples'], melkwargs=melkwargs, log_mels=True, norm='ortho')
-        # data = mfcc_transformation(background_add)
-        # data_placeholder[i - offset] = data[:,:self.data_processing_parameters['spectrogram_length']].numpy().transpose()
-
-        # print('Background add:', background_add.numpy().shape) # (16000,)
-
-        data_placeholder[i - offset] = background_add.numpy()
-
+        melkwargs={ 'n_fft':1024, 'win_length':self.data_processing_parameters['window_size_samples'], 'hop_length':self.data_processing_parameters['window_stride_samples'],
+               'f_min':20, 'f_max':4000, 'n_mels':40}
+        mfcc_transformation = torchaudio.transforms.MFCC(n_mfcc=self.data_processing_parameters['feature_bin_count'], sample_rate=self.data_processing_parameters['desired_samples'], melkwargs=melkwargs, log_mels=True, norm='ortho')
+        data = mfcc_transformation(background_add)
+        data_placeholder[i - offset] = data[:,:self.data_processing_parameters['spectrogram_length']].numpy().transpose()
 
         # Compute MFCCs - TensorFlow (matching C-based implementation)
         # tf_data = tf.convert_to_tensor(background_add.numpy(), dtype=tf.float32)
@@ -587,10 +560,15 @@ class AudioProcessor(object):
           # Assumption: the test noise list contains all noises 
           # TODO: Search in the complete noise list
 
+          # if (mode == 'training'):
+          #   noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_name[background_index])
+          # else:
+          #   noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_test_name[background_index]) 
+
           if (mode == 'training'):
-            noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_name[background_index])
+            noises_placeholder[i - offset] = self.background_noise_name[background_index]
           else:
-            noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_test_name[background_index]) 
+            noises_placeholder[i - offset] = self.background_noise_test_name[background_index]
 
     return data_placeholder, labels_placeholder, noises_placeholder
 
