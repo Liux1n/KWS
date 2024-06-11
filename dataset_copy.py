@@ -84,12 +84,12 @@ class AudioProcessor(object):
   # Prepare data
 
   def __init__(self, training_parameters, data_processing_parameters):
-      
+      self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       self.data_directory = training_parameters['data_dir']
       self.generate_background_noise(training_parameters)
       self.generate_data_dictionary(training_parameters)
       self.data_processing_parameters = data_processing_parameters
-      self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+      
 
 
 
@@ -99,6 +99,7 @@ class AudioProcessor(object):
     # Make sure the shuffling and picking of unknowns is deterministic.
     random.seed(training_parameters['seed'])
     np.random.seed(training_parameters['seed'])
+
     
     wanted_words_index = {}
 
@@ -229,35 +230,8 @@ class AudioProcessor(object):
 
   def get_size(self, mode):
     # Compute data set size
-
     return len(self.data_set[mode])
   
-  def divide_data_set(self, training_parameters, task_id):
-    n_samples_task_0 = training_parameters['batch_size']*352
-    n_samples_task_1 = training_parameters['batch_size']*80
-    n_samples_task_2 = training_parameters['batch_size']*125
-    n_samples_task_3 = training_parameters['batch_size']*108
-    if task_id == 'dil_task_0':
-      # take first n_samples from the training set as training set
-      # start_idx = 0
-      end_idx = n_samples_task_0
-      self.data_set['training'] = self.data_set['training'][:end_idx]
-    elif task_id == 'dil_task_1':
-      # take the next n_samples from the training set as training set
-      start_idx = n_samples_task_0+1
-      end_idx = n_samples_task_0 + n_samples_task_1
-      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
-    elif task_id == 'dil_task_2':
-      # take the next n_samples from the training set as training set
-      start_idx = n_samples_task_0 + n_samples_task_1 + 1
-      end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2
-      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
-    elif task_id == 'dil_task_3':
-      # take the next n_samples from the training set as training set
-      start_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + 1
-      end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + n_samples_task_3
-      self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
-    
 
 
   def get_data(self, mode, training_parameters, task_id, task, offset):
@@ -266,106 +240,7 @@ class AudioProcessor(object):
     candidates = self.data_set[mode] # TODO: modify this for CIL
     
     snr = training_parameters['snr']
-    # {'label': 'two', 'file': '/usr/scratch/sassauna2/sem24f39/GSC/dataset/two/caf9fceb_nohash_1.wav', 'speaker': 'caf9fceb'}
-    # target_words='yes,no,up,down,left,right,on,off,stop,go,'
-                    #2  ,3 ,4 ,5   ,6   ,7    ,8 ,9  ,10  ,11
-    # target_words='yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,
-    # follow,forward,four,happy,house,learn,marvin,nine,one,seven,sheila,six,three,tree,two,visual,wow,zero,'  # GSCv2 - 35 words
-    
-    # self.data_set = {'validation': [], 'testing': [], 'training': []}
 
-    # 1 to 17: yes,no,up,down,left,right,on,off,stop,go,backward,bed,bird,cat,dog,eight,five,
-    # 18 to 23: follow, forward, four, happy, house, learn
-    # 24 to 30: marvin, nine, one, seven, sheila, six
-    # 31 to 35: three, tree, two, visual, wow, zero
-
-    if mode == 'training':
-      if training_parameters['mode'] == 'cil':
-        if task_id == 'cil_task_0': # 1 to 17
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-          # labels = set(['yes','no'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_1': # 18 to 23
-          labels = set(['follow','forward','four','happy','house','learn'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_2': # 24 to 29
-          labels = set(['marvin','nine','one','seven','sheila','six'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_3': # 30 to 35
-          labels = set(['three','tree','two','visual','wow','zero'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_joint': # keep all the words
-          pass
-
-        
-        elif task_id == 'cil_task_0_disjoint':
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-        
-        elif task_id == 'cil_task_1_disjoint':
-          labels = set(['follow','forward','four','happy','house','learn'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_2_disjoint':
-          labels = set(['marvin','nine','one','seven','sheila','six'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        elif task_id == 'cil_task_3_disjoint':
-          labels = set(['three','tree','two','visual','wow','zero'])
-          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-        else:
-          pass
-
-    elif mode == 'validation' or mode == 'testing':
-        
-      if task_id == 'cil_task_0': # 1 to 17
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-      elif task_id == 'cil_task_1': # 1 to 23
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                      'follow','forward','four','happy','house','learn'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-      elif task_id == 'cil_task_2': # 1 to 29
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                      'follow','forward','four','happy','house','learn',
-                      'marvin','nine','one','seven','sheila','six'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-      elif task_id == 'cil_task_3' or task_id == 'cil_joint': # 1 to 35
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                      'follow','forward','four','happy','house','learn',
-                      'marvin','nine','one','seven','sheila','six',
-                      'three','tree','two','visual','wow','zero'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-      
-      elif task_id == 'cil_task_0_disjoint':
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-      
-      elif task_id == 'cil_task_1_disjoint':
-        labels = set(['follow','forward','four','happy','house','learn'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-      elif task_id == 'cil_task_2_disjoint':
-        labels = set(['marvin','nine','one','seven','sheila','six'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-
-      elif task_id == 'cil_task_3_disjoint':
-        labels = set(['three','tree','two','visual','wow','zero'])
-        candidates = [candidate for candidate in candidates if candidate['label'] in labels]
-        
-      else:
-        pass
-
-
-    # print('Candidates:', candidates)
 
     if training_parameters['batch_size'] == -1:
       samples_number = len(candidates)
@@ -373,10 +248,11 @@ class AudioProcessor(object):
       samples_number = max(0, min(training_parameters['batch_size'], len(candidates) - offset))
 
     # Create a data placeholder
-    data_placeholder = np.zeros((samples_number, self.data_processing_parameters['spectrogram_length'],self.data_processing_parameters['feature_bin_count']),dtype='float32' )
-    labels_placeholder = np.zeros(samples_number)
-    # noises_placeholder = np.zeros(samples_number)
+    data_placeholder = torch.zeros((samples_number, self.data_processing_parameters['spectrogram_length'], self.data_processing_parameters['feature_bin_count']), dtype=torch.float32)
+    # labels_placeholder = np.zeros(samples_number)
+    labels_placeholder = torch.zeros(samples_number, dtype=torch.long).to(self.device)
     noises_placeholder = [''] * samples_number
+
 
     # Required for noise analysis
     if (training_parameters['noise_mode'] == 'nlkws'):
@@ -474,80 +350,17 @@ class AudioProcessor(object):
         else:
           data_augmentation_parameters['foreground_volume'] = 1
 
-        # Load data
-        try:
-            sf_loader, _ = sf.read(data_augmentation_parameters['wav_filename'])
-            wav_file = torch.Tensor(np.array([sf_loader]))
-        except:
-            pass
 
-        # Ensure data length is equal to the number of desired samples
-        if len(wav_file[0]) < self.data_processing_parameters['desired_samples']:
-            wav_file=torch.nn.ConstantPad1d((0,self.data_processing_parameters['desired_samples']-len(wav_file[0])),0)(wav_file[0])
-        else:
-            wav_file=wav_file[0][:self.data_processing_parameters['desired_samples']]
-        scaled_foreground = torch.mul(wav_file, data_augmentation_parameters['foreground_volume'])
-
-        # Padding wrt the time shift offset
-        pad_tuple=tuple(data_augmentation_parameters['time_shift_padding'][0])
-        padded_foreground = torch.nn.ConstantPad1d(pad_tuple,0)(scaled_foreground)
-        sliced_foreground = padded_foreground[data_augmentation_parameters['time_shift_offset'][0]:data_augmentation_parameters['time_shift_offset'][0]+self.data_processing_parameters['desired_samples']]
-        # print('Sliced foreground:', sliced_foreground.shape)
-        # get the power of sliced foreground
-        power_foreground = torch.sum(torch.pow(sliced_foreground,2))
-        # Mix in background noise
-        background_mul = torch.mul(torch.Tensor(data_augmentation_parameters['background_noise'][:,0]),data_augmentation_parameters['background_volume'])
-        power_background = torch.sum(torch.pow(background_mul,2))
-
-        # normalize the SNR to snr above
-        beta = torch.sqrt(power_foreground / power_background) * 10 ** (-snr / 20)
-        # beta = torch.sqrt(power_foreground / power_background)
-        
-        if power_background != 0:
-          # print(f"Beta: ", beta)
-          background_mul = background_mul * beta
-        else:
-          pass
-
-        # # power of the background noise
-        # power_background = torch.sum(torch.pow(background_mul,2))
-        # # get new SNR
-        # if power_background != 0:
-        #   print(f"power ratio: ", power_foreground / power_background)
-        # else:
-        #   print("power_foreground: ", power_foreground, ". power_background: ", power_background)
-
-        if use_background:
-          background_add = torch.add(background_mul, sliced_foreground)
-        else:
-          background_add = sliced_foreground
+        background_mul = torch.mul(torch.Tensor(data_augmentation_parameters['background_noise'][:,0]),data_augmentation_parameters['background_volume']).to(self.device)
 
         # Compute MFCCs - PyTorch
         melkwargs={ 'n_fft':1024, 'win_length':self.data_processing_parameters['window_size_samples'], 'hop_length':self.data_processing_parameters['window_stride_samples'],
                'f_min':20, 'f_max':4000, 'n_mels':40}
-        mfcc_transformation = torchaudio.transforms.MFCC(n_mfcc=self.data_processing_parameters['feature_bin_count'], sample_rate=self.data_processing_parameters['desired_samples'], melkwargs=melkwargs, log_mels=True, norm='ortho')
-        data = mfcc_transformation(background_add)
-        data_placeholder[i - offset] = data[:,:self.data_processing_parameters['spectrogram_length']].numpy().transpose()
+        mfcc_transformation = torchaudio.transforms.MFCC(n_mfcc=self.data_processing_parameters['feature_bin_count'], sample_rate=self.data_processing_parameters['desired_samples'], melkwargs=melkwargs, log_mels=True, norm='ortho').to(self.device)
+        data = mfcc_transformation(background_mul).to(self.device)
+        # print('Data shape:', data.shape)
+        data_placeholder[i - offset] = data[:,:self.data_processing_parameters['spectrogram_length']].transpose(0, 1)
 
-        # Compute MFCCs - TensorFlow (matching C-based implementation)
-        # tf_data = tf.convert_to_tensor(background_add.numpy(), dtype=tf.float32)
-        # tf_stfts = tf.signal.stft(tf_data, frame_length=self.data_processing_parameters['window_size_samples'], frame_step=self.data_processing_parameters['window_stride_samples'], fft_length=1024)
-        # tf_spectrograms = tf.abs(tf_stfts)
-        # power = True
-        # if power:
-        #     tf_spectrograms = tf_spectrograms ** 2
-        # num_spectrogram_bins = tf_stfts.shape[-1]
-        # linear_to_mel_weight_matrix = tf.signal.linear_to_mel_weight_matrix(40, num_spectrogram_bins, self.data_processing_parameters['desired_samples'], 20, 4000)
-        # tf_spectrograms = tf.cast(tf_spectrograms, tf.float32)
-        # tf_mel_spectrograms = tf.tensordot(tf_spectrograms, linear_to_mel_weight_matrix, 1)
-        # tf_mel_spectrograms.set_shape(tf_spectrograms.shape[:-1].concatenate(
-        #             linear_to_mel_weight_matrix.shape[-1:]))
-        # tf_log_mel = tf.math.log(tf_mel_spectrograms + 1e-6)
-        # tf_mfccs = tf.signal.mfccs_from_log_mel_spectrograms(tf_log_mel)[..., :self.data_processing_parameters['feature_bin_count']]
-        # mfcc = torch.Tensor(tf_mfccs.numpy())
-        # data_placeholder[i - offset] = mfcc
-
-        # data_placeholder[i - offset] = np.clip(data_placeholder[i - offset] + 128, 0, 255)
 
         label_index = self.word_to_index[sample['label']]
         labels_placeholder[i - offset] = label_index
@@ -560,15 +373,11 @@ class AudioProcessor(object):
           # Assumption: the test noise list contains all noises 
           # TODO: Search in the complete noise list
 
-          # if (mode == 'training'):
-          #   noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_name[background_index])
-          # else:
-          #   noises_placeholder[i - offset] = self.background_noise_test_name.index(self.background_noise_test_name[background_index]) 
-
           if (mode == 'training'):
             noises_placeholder[i - offset] = self.background_noise_name[background_index]
           else:
             noises_placeholder[i - offset] = self.background_noise_test_name[background_index]
+
 
     return data_placeholder, labels_placeholder, noises_placeholder
 

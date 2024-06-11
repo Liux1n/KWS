@@ -258,6 +258,32 @@ class AudioProcessor(object):
       start_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + 1
       end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + n_samples_task_3
       self.data_set['training'] = self.data_set['training'][start_idx:end_idx]
+
+  # def divide_data_set(self, training_parameters, task_id):
+  #   n_samples_task_0 = training_parameters['batch_size']*352
+  #   n_samples_task_1 = training_parameters['batch_size']*80
+  #   n_samples_task_2 = training_parameters['batch_size']*125
+  #   n_samples_task_3 = training_parameters['batch_size']*108
+  #   if task_id == 'dil_task_0':
+  #     # take first n_samples from the training set as training set
+  #     # start_idx = 0
+  #     end_idx = n_samples_task_0
+  #     self.data_set['training'] = self.data_set['training'][:n_samples_task_0]
+  #   elif task_id == 'dil_task_1':
+  #     # take the next n_samples from the training set as training set
+  #     start_idx = n_samples_task_0+1
+  #     end_idx = n_samples_task_0 + n_samples_task_1
+  #     self.data_set['training'] = self.data_set['training'][:n_samples_task_1]
+  #   elif task_id == 'dil_task_2':
+  #     # take the next n_samples from the training set as training set
+  #     start_idx = n_samples_task_0 + n_samples_task_1 + 1
+  #     end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2
+  #     self.data_set['training'] = self.data_set['training'][:n_samples_task_2]
+  #   elif task_id == 'dil_task_3':
+  #     # take the next n_samples from the training set as training set
+  #     start_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + 1
+  #     end_idx = n_samples_task_0 + n_samples_task_1 + n_samples_task_2 + n_samples_task_3
+      self.data_set['training'] = self.data_set['training'][:n_samples_task_3]
     
 
 
@@ -280,43 +306,57 @@ class AudioProcessor(object):
     # 24 to 30: marvin, nine, one, seven, sheila, six
     # 31 to 35: three, tree, two, visual, wow, zero
 
+    set_task_0 = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+    set_task_1 = set(['follow','forward','four','happy','house','learn'])
+    set_task_2 = set(['marvin','nine','one','seven','sheila','six'])
+    set_task_3 = set(['three','tree','two','visual','wow','zero'])
+
     if mode == 'training':
       if training_parameters['mode'] == 'cil':
         if task_id == 'cil_task_0': # 1 to 17
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          labels = set_task_0
           # labels = set(['yes','no'])
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_task_1': # 18 to 23
-          labels = set(['follow','forward','four','happy','house','learn'])
+          labels = set_task_1
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_task_2': # 24 to 29
-          labels = set(['marvin','nine','one','seven','sheila','six'])
+          labels = set_task_2
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_task_3': # 30 to 35
-          labels = set(['three','tree','two','visual','wow','zero'])
+          labels = set_task_3
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_joint': # keep all the words
           pass
 
+        elif task_id == 'cil_task_1_separate': # 24 to 29
+          labels = set_task_0.union(set_task_1)
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+        elif task_id == 'cil_task_2_separate': # 30 to 35
+          labels = set_task_0.union(set_task_1).union(set_task_2)
+          candidates = [candidate for candidate in candidates if candidate['label'] in labels]
+
+
         
         elif task_id == 'cil_task_0_disjoint':
-          labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+          labels = set_task_0
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
         
         elif task_id == 'cil_task_1_disjoint':
-          labels = set(['follow','forward','four','happy','house','learn'])
+          labels = set_task_1
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_task_2_disjoint':
-          labels = set(['marvin','nine','one','seven','sheila','six'])
+          labels = set_task_2
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         elif task_id == 'cil_task_3_disjoint':
-          labels = set(['three','tree','two','visual','wow','zero'])
+          labels = set_task_3
           candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
         else:
@@ -325,41 +365,45 @@ class AudioProcessor(object):
     elif mode == 'validation' or mode == 'testing':
         
       if task_id == 'cil_task_0': # 1 to 17
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+        labels = set_task_0
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
       elif task_id == 'cil_task_1': # 1 to 23
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                      'follow','forward','four','happy','house','learn'])
+        set_task = set_task_0.union(set_task_1)
+        labels = set_task
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
       elif task_id == 'cil_task_2': # 1 to 29
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                      'follow','forward','four','happy','house','learn',
-                      'marvin','nine','one','seven','sheila','six'])
+        set_task = set_task_0.union(set_task_1).union(set_task_2)
+        # labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+        #               'follow','forward','four','happy','house','learn',
+        #               'marvin','nine','one','seven','sheila','six'])
+        labels = set_task
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
       elif task_id == 'cil_task_3' or task_id == 'cil_joint': # 1 to 35
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
-                      'follow','forward','four','happy','house','learn',
-                      'marvin','nine','one','seven','sheila','six',
-                      'three','tree','two','visual','wow','zero'])
+        # labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five',
+        #               'follow','forward','four','happy','house','learn',
+        #               'marvin','nine','one','seven','sheila','six',
+        #               'three','tree','two','visual','wow','zero'])
+        set_task = set_task_0.union(set_task_1).union(set_task_2).union(set_task_3)
+        labels = set_task
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
       
       elif task_id == 'cil_task_0_disjoint':
-        labels = set(['yes','no','up','down','left','right','on','off','stop','go','backward','bed','bird','cat','dog','eight','five'])
+        labels = set_task_0
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
       
       elif task_id == 'cil_task_1_disjoint':
-        labels = set(['follow','forward','four','happy','house','learn'])
+        labels = set_task_1
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
       elif task_id == 'cil_task_2_disjoint':
-        labels = set(['marvin','nine','one','seven','sheila','six'])
+        labels = set_task_2
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
 
       elif task_id == 'cil_task_3_disjoint':
-        labels = set(['three','tree','two','visual','wow','zero'])
+        labels = set_task_3
         candidates = [candidate for candidate in candidates if candidate['label'] in labels]
         
       else:
@@ -380,7 +424,7 @@ class AudioProcessor(object):
     data_placeholder = torch.zeros((samples_number, self.data_processing_parameters['spectrogram_length'], self.data_processing_parameters['feature_bin_count']), dtype=torch.float32)
     # labels_placeholder = np.zeros(samples_number)
     labels_placeholder = torch.zeros(samples_number, dtype=torch.long).to(self.device)
-    if training_parameters['method'] == 'feat_vis_noise':
+    if training_parameters['method'] == 'feat_vis_noise' or training_parameters['method'] == 'noise_data':
       noises_placeholder = [''] * samples_number
     else:
       # noises_placeholder = np.zeros(samples_number)
@@ -572,7 +616,7 @@ class AudioProcessor(object):
 
           # Assumption: the test noise list contains all noises 
           # TODO: Search in the complete noise list
-          if training_parameters['method'] == 'feat_vis_noise':
+          if training_parameters['method'] == 'feat_vis_noise' or training_parameters['method'] == 'noise_data':
             if (mode == 'training'):
               noises_placeholder[i - offset] = self.background_noise_name[background_index]
             else:

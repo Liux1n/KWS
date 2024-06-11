@@ -35,6 +35,9 @@ def augment_mfcc(samples_inputs):
     augmented_inputs = []
 
     for mfcc in samples_inputs:
+
+        device = mfcc.device
+        mfcc = mfcc.to(device)
         # Randomly apply augmentations
         augmented_mfcc = apply_random_augmentations(mfcc)
         augmented_inputs.append(augmented_mfcc)
@@ -44,66 +47,68 @@ def augment_mfcc(samples_inputs):
 def apply_random_augmentations(mfcc):
     # List of possible augmentations
     augmentations = [time_masking, frequency_masking, time_warping, 
-                     add_gaussian_noise, random_erasing, time_compression, frequency_compression]
+                     add_gaussian_noise, random_erasing]
     
-    # Randomly decide whether to apply each augmentation
-    for augmentation in augmentations:
-        if np.random.rand() > 0.5:  # 50% chance to apply each augmentation
-            mfcc = augmentation(mfcc)
+    # Randomly select one augmentation to apply
+    augmentation = np.random.choice(augmentations)
+    mfcc = augmentation(mfcc)
     
     return mfcc
 
 def time_masking(mfcc, T=10):
+    # mfcc shape: [1, 49, 10]
     time_steps = mfcc.shape[-1]
-    t = np.random.randint(0, T)
+    t = np.random.randint(0, min(T, time_steps))
     t0 = np.random.randint(0, time_steps - t)
-    mfcc[:, t0:t0+t] = 0
+    mfcc[:, :, t0:t0+t] = 0
     return mfcc
 
 def frequency_masking(mfcc, F=5):
-    freq_channels = mfcc.shape[0]
-    f = np.random.randint(0, F)
+    # mfcc shape: [1, 49, 10]
+    freq_channels = mfcc.shape[-2]
+    if freq_channels <= F:
+        f = np.random.randint(0, freq_channels)  # Adjust F if necessary
+    else:
+        f = np.random.randint(0, F)
     f0 = np.random.randint(0, freq_channels - f)
-    mfcc[f0:f0+f, :] = 0
+    mfcc[:, f0:f0+f, :] = 0
     return mfcc
 
 def time_warping(mfcc, W=5):
+    # mfcc shape: [1, 49, 10]
     time_steps = mfcc.shape[-1]
-    t = np.random.randint(0, W)
+    t = np.random.randint(0, min(W, time_steps))
     t0 = np.random.randint(0, time_steps - t)
-    mfcc = torch.roll(mfcc, shifts=t, dims=1)
+    mfcc = torch.roll(mfcc, shifts=t, dims=-1)
     return mfcc
 
 def add_gaussian_noise(mfcc, mean=0, std=0.01):
-    noise = torch.randn(mfcc.size()) * std + mean
+    noise = torch.randn(mfcc.size(), device=mfcc.device) * std + mean
     return mfcc + noise
 
 def random_erasing(mfcc, p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3)):
     if np.random.rand() > p:
         return mfcc
-    area = mfcc.size(0) * mfcc.size(1)
+    area = mfcc.size(-2) * mfcc.size(-1)
     target_area = np.random.uniform(scale[0], scale[1]) * area
     aspect_ratio = np.random.uniform(ratio[0], ratio[1])
     h = int(round(np.sqrt(target_area * aspect_ratio)))
     w = int(round(np.sqrt(target_area / aspect_ratio)))
 
-    if h < mfcc.size(0) and w < mfcc.size(1):
-        x1 = np.random.randint(0, mfcc.size(0) - h)
-        y1 = np.random.randint(0, mfcc.size(1) - w)
-        mfcc[x1:x1+h, y1:y1+w] = 0
+    if h < mfcc.size(-2) and w < mfcc.size(-1):
+        x1 = np.random.randint(0, mfcc.size(-2) - h)
+        y1 = np.random.randint(0, mfcc.size(-1) - w)
+        mfcc[:, x1:x1+h, y1:y1+w] = 0
     return mfcc
 
 def time_compression(mfcc, rate=0.8):
-    time_steps = mfcc.size(1)
-    compressed_time_steps = int(time_steps * rate)
-    compressed_mfcc = torch.nn.functional.interpolate(mfcc.unsqueeze(0), size=(mfcc.size(0), compressed_time_steps), mode='bilinear', align_corners=False)
-    return compressed_mfcc.squeeze(0)
+    # mfcc shape: [1, 49, 10]
+    time_steps = mfcc.size(-1)
+    compressed_time_steps = max(int(time_steps * rate), 1)  # Ensure the compressed size is at least 1
+    compressed_mfcc = torch.nn.functional.interpolate(mfcc, size=(mfcc.size(-2), compressed_time_steps), mode='bilinear', align_corners=False)
+    return compressed_mfcc
 
-def frequency_compression(mfcc, rate=0.8):
-    freq_channels = mfcc.size(0)
-    compressed_freq_channels = int(freq_channels * rate)
-    compressed_mfcc = torch.nn.functional.interpolate(mfcc.unsqueeze(0), size=(compressed_freq_channels, mfcc.size(1)), mode='bilinear', align_corners=False)
-    return compressed_mfcc.squeeze(0)
+
 
 def npy_to_txt(layer_number, activations):
     # Saving the input
@@ -297,17 +302,16 @@ def parameter_generation(args=None, config=None, task_id=None):
                 
         if args.mode == 'dil':
 
-            # noise_task_0 = ['SCAFE', 'SPSQUARE', 'OHALLWAY', 'NFIELD', 'NPARK', 'NRIVER', 'OOFFICE', 'TCAR', 'TMETRO']
-            # noise_task_1 = ['STRAFFIC', 'OMEETING', 'TBUS']
-            # noise_task_2 = ['DKITCHEN', 'DLIVING', 'DWASHING']
-            # noise_task_3 = ['PCAFETER', 'PRESTO', 'PSTATION']
-
-            noise_task_0 = ['TBUS', 'OMEETING', 'OHALLWAY', 'NFIELD', 'NPARK', 'NRIVER', 'OOFFICE', 'SPSQUARE', 'DLIVING']
-            noise_task_1 = ['TCAR', 'STRAFFIC', 'PSTATION']
-            noise_task_2 = ['DKITCHEN', 'TMETRO', 'DWASHING']
-            noise_task_3 = ['PCAFETER', 'PRESTO', 'SCAFE'] # dil_base_pretrain_20240515-002545_noise_fixed_seed42_snr-8.pth
-            # # 60.63109202048571 - 60.788038988931106 - 60.85412192301338 - 59.25161077151826
-
+            # trial final
+            # Task 0: ['OMEETING', 'OHALLWAY', 'NFIELD', 'NPARK', 'OOFFICE', 'DLIVING', 'DWASHING']
+            # Task 1: ['TBUS', 'SPSQUARE', 'PCAFETER', 'SCAFE']
+            # Task 2: ['NRIVER', 'TCAR', 'DKITCHEN']
+            # Task 3: ['STRAFFIC', 'PSTATION', 'TMETRO', 'PRESTO']
+            noise_task_0 = ['OMEETING', 'OHALLWAY', 'NFIELD', 'NPARK', 'OOFFICE', 'DLIVING', 'DWASHING']
+            noise_task_1 = ['TBUS', 'SPSQUARE', 'PCAFETER', 'SCAFE']
+            noise_task_2 = ['NRIVER', 'TCAR', 'DKITCHEN']
+            noise_task_3 = ['STRAFFIC', 'PSTATION', 'TMETRO', 'PRESTO']
+            # 61.44061 - 60.77152 - 60.03635 - 58.99554
             
             if task_id == None:
                 # not used.
@@ -341,8 +345,28 @@ def parameter_generation(args=None, config=None, task_id=None):
 
                 training_parameters['noise_train'] = noise_task_0 + noise_task_1 + noise_task_2 + noise_task_3
             elif task_id == 'dil_test':
-
                 pass
+
+            elif task_id == 'dil_task_0_separate':
+
+                training_parameters['noise_test']  = noise_task_0
+                training_parameters['noise_train'] = noise_task_0
+
+            elif task_id == 'dil_task_1_separate':
+                
+                # test: noise_task_0+ noise_task_1
+                training_parameters['noise_test']  = noise_task_0 + noise_task_1
+                training_parameters['noise_train'] = noise_task_0 + noise_task_1
+                                                
+
+            elif task_id == 'dil_task_2_separate':
+                training_parameters['noise_test']  = noise_task_0 + noise_task_1 + noise_task_2
+                training_parameters['noise_train'] = noise_task_0 + noise_task_1 + noise_task_2
+                
+            elif task_id == 'dil_task_3_separate':
+                training_parameters['noise_test']  = noise_task_0 + noise_task_1 + noise_task_2 + noise_task_3
+                
+                training_parameters['noise_train'] = noise_task_0 + noise_task_1 + noise_task_2 + noise_task_3
 
                 
             if task_id == 'dil_task_0_disjoint':
@@ -3208,6 +3232,342 @@ class Buffer_LDAAECB:
             else:
                 self.acc[label] = (self.acc[label] + acc[label]) / 2
         
+
+    
+    def get_size(self):
+        """
+        Get the number of examples in the buffer.
+        """
+        num_examples = self.buffer['examples'].size(0)
+        num_labels = self.buffer['labels'].size(0)
+        assert num_examples == num_labels
+        return num_examples
+
+    def reset_num_seen_examples(self):
+        """
+        Reset the number of seen examples.
+        """
+        self.num_seen_examples = 0
+
+    def is_empty(self):
+        """
+        Check if the buffer is empty.
+        """
+        return self.num_seen_examples == 0  
+    
+    def get_class_count(self):
+        """
+        Get the number of examples for each class in the buffer.
+        """
+        return self.class_count
+
+
+
+class Buffer_DAECB_reg:
+
+    """
+    The memory buffer of rehearsal method.
+    """
+    def __init__(self, buffer_size, batch_size, device):
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.device = device
+        self.num_seen_examples = 0
+        self.buffer = {}
+        self.loss = {}
+        self.loss_index = {}
+
+        self.logits = {}
+        self.logits_index = {}
+
+        self.class_count = {}
+
+        self.class_count_total = {}
+
+        self.full_classes = []
+        print("Buffer initialized")
+    
+    def load_buffer(self, buffer_state):
+        '''
+        load the buffer
+        buffer_state = {'num_seen_examples': num_seen_examples, 
+                        'buffer': buffer, 
+                        'loss': loss, 
+                        'loss_index': loss_index, 
+                        'class_count': class_count, 
+                        'class_count_total': class_count_total, 
+                        'full_classes': full_classes}
+        '''
+        self.num_seen_examples = buffer_state['num_seen_examples']
+        self.buffer = buffer_state['buffer']
+        self.loss = buffer_state['loss']
+        self.loss_index = buffer_state['loss_index']
+        self.class_count = buffer_state['class_count']
+        self.class_count_total = buffer_state['class_count_total']
+        self.full_classes = buffer_state['full_classes']
+        
+
+    def get_entire_buffer(self):
+        '''
+        get everything in the buffer
+        self.num_seen_examples: int
+        self.buffer: dict
+        self.loss: dict
+        self.loss_index: dict
+        self.class_count: dict
+        self.class_count_total: dict
+        self.full_classes: list
+        '''
+        return self.num_seen_examples, self.buffer, self.logits, self.logits_index, self.class_count, self.class_count_total, self.full_classes
+
+    def get_total_class_count(self):
+        """
+        Get the total number of examples for each class in the self.buffer[label]
+        """
+        total_class_count = 0
+        for label in self.buffer.keys():
+            total_class_count += self.buffer[label].size(0)
+        return total_class_count
+    
+    def update_old_classes(self):
+        self.old_classes = self.buffer.keys()
+    
+    def get_old_classes(self):
+        return self.old_classes
+
+    
+    def add_data(self, examples, logits, labels):
+        """
+        Add data to the buffer.
+        examples: torch.Size([128, 1, 49, 10])
+        logits: torch.Size([128, k])
+        labels: torch.Size([128])
+        """
+        # make losses not updated
+        # losses = losses.detach()
+        input_size = examples.size(0)
+        
+        if self.num_seen_examples < self.buffer_size:
+            
+            for i in range(input_size):
+                label = labels[i].item()
+                if (label not in self.buffer.keys()) or (self.buffer.items() == {}):
+                    # examples: torch.Size([128, 1, 49, 10])
+                    # examples[i]: torch.Size([1, 49, 10])
+                    # loss[i]: torch.Size([1])
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    self.logits[label] = torch.unsqueeze(logits[i], 0) # torch.Size([1])
+                    # self.loss[label] = torch.unsqueeze(losses[i], 0)
+                    # self.buffer[label].append(examples[i])
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+                else:
+                    # self.buffer[label] = [examples[i]]
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+
+                    self.logits[label] = torch.cat((self.logits[label], torch.unsqueeze(logits[i], 0)), 0) # torch.Size([n])
+                    # self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0)
+                    self.class_count[label] += 1
+                    self.class_count_total[label] += 1
+                self.num_seen_examples += 1
+            
+        else:
+            # print('self.loss:', self.loss)
+            # print('self.buffer.keys()', self.buffer.keys())
+            for i in range(input_size):
+                largest_class_count = max(self.class_count.values())
+                largest_classes = set(cls for cls, count in self.class_count.items() if count == largest_class_count)
+
+                self.full_classes = list(set(self.full_classes).union(largest_classes))
+
+                label = labels[i].item()
+                if label not in self.buffer.keys():
+                    # class is new.
+
+                    self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                    self.logits[label] = torch.unsqueeze(logits[i], 0)
+                    # randomly select a class from the largest classes
+                    random_class = random.choice(list(largest_classes))
+                    # random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+                    self.logits[random_class] = torch.cat((self.logits[random_class][:random_index], self.logits[random_class][random_index+1:]), 0)
+                    # self.loss[random_class] = torch.cat((self.loss[random_class][:random_index], self.loss[random_class][random_index+1:]), 0)
+
+                    self.num_seen_examples += 1
+                    # add class count
+                    self.class_count[label] = 1
+                    self.class_count_total[label] = 1
+
+                elif (label in self.buffer.keys()) and (label not in self.full_classes):
+       
+                    # class is not in the full classes
+
+                    self.buffer[label] = torch.cat((self.buffer[label], torch.unsqueeze(examples[i], 0)), 0)
+     
+                    self.logits[label] = torch.cat((self.logits[label], torch.unsqueeze(logits[i], 0)), 0)
+                    # self.loss[label] = torch.cat((self.loss[label], torch.unsqueeze(losses[i], 0)), 0)
+
+                    largest_classes_with_count_larger_than_one = [class_label for class_label in largest_classes if self.class_count[class_label] > 1]
+
+                    # order the self.class_count_total.keys() by the value of self.class_count_total
+                    sorted_class_count_total = {k: v for k, v in sorted(self.class_count_total.items(), key=lambda item: item[1], reverse=True)}
+                    # # take intersection of largest_classes_with_count_larger_than_one and sorted_class_count_total
+                    # largest_classes_with_count_larger_than_one = list(set(largest_classes_with_count_larger_than_one).intersection(set(sorted_class_count_total)))
+                    random_class = random.choice(list(largest_classes_with_count_larger_than_one))
+
+                    exp_n = np.exp(-self.class_count_total[label])
+                    exp_sum = np.sum([np.exp(-v) for v in sorted_class_count_total.values()])
+                    w = exp_n / exp_sum
+                    gamma = self.buffer_size * w
+                    
+                    for key in sorted_class_count_total:
+                        if key in largest_classes_with_count_larger_than_one and self.class_count[key] >= gamma:
+                            random_class = key
+                            break
+                        
+                    if self.buffer[random_class].size(0) > 1:
+                        random_index = random.randint(0, self.buffer[random_class].size(0) - 1)
+                        self.class_count[random_class] -= 1
+                    else:
+                        random_index = 0
+                        self.class_count[random_class] = 0
+                    # remove the random_index from the buffer
+                    self.buffer[random_class] = torch.cat((self.buffer[random_class][:random_index], self.buffer[random_class][random_index+1:]), 0)
+        
+                    self.logits[random_class] = torch.cat((self.logits[random_class][:random_index], self.logits[random_class][random_index+1:]), 0)
+                    # self.loss[random_class] = torch.cat((self.loss[random_class][:random_index], self.loss[random_class][random_index+1:]), 0)
+
+                    self.class_count[label] += 1
+                    self.num_seen_examples += 1
+                    self.class_count_total[label] += 1
+   
+                else:
+                    # class is in the full classes
+                    count_label_current = self.class_count[label]
+                    count_label_total = self.class_count_total[label]
+                    # sample a u from uniform[0,1]
+                    u = int(torch.rand(1))
+                    if u <= count_label_current / count_label_total:
+   
+                        # random_index = random.randint(0, self.buffer[label].size(0) - 1)
+                        if self.buffer[label].size(0) > 1:
+                            # randomly select an example from the buffer according to the loss distribution
+                            examples_in_buffer = self.buffer[label] # torch.Size([n, 49, 10])
+                            # flatten the examples_in_buffer
+                            examples_in_buffer = examples_in_buffer.view(examples_in_buffer.size(0), -1)
+                            current_example = examples[i] # torch.Size([1, 49, 10])
+                            # flatten the current_example
+                            current_example = current_example.view(1, -1)
+                            # print('examples_in_buffer:', examples_in_buffer.size()) # torch.Size([n, 490])
+                            # print('current_example:', current_example.size()) # torch.Size([1, 490])
+
+                            # Calculate cosine similarity
+                            score_similarity = F.cosine_similarity(examples_in_buffer.to(self.device), current_example.to(self.device), dim=-1) # torch.Size([n])
+                            # normalize the cosine similarities[-1,1]
+                            score_similarity = 0.5 * (score_similarity + 1) # torch.Size([n]) range: [0,1]
+
+                            # score_loss = F.softmax(-self.loss[label], dim=0) # torch.Size([n])
+                            
+                            # alpha is sum of the cosine similarity/ sum of the loss
+                            # alpha = torch.sum(score_similarity) / torch.sum(score_loss)
+                            # total_score = alpha * score_loss + score_similarity
+
+                            random_index = torch.multinomial(score_similarity, 1).item()
+
+                            # random_index = torch.multinomial(F.softmax(-self.loss[label], dim=0), 1).item()
+
+                            self.buffer[label][random_index] = examples[i]
+                            self.logits[label][random_index] = logits[i]
+
+                                    
+                        elif self.buffer[label].size(0) == 1:
+                            random_index = 0
+                            self.buffer[label][random_index] = examples[i]
+                            self.logits[label][random_index] = logits[i]
+                        else:
+                            random_index = 0
+                            self.buffer[label] = torch.unsqueeze(examples[i], 0)
+                            self.logits[label] = torch.unsqueeze(logits[i], 0)
+                        # self.buffer[label][random_index] = examples[i]
+                        self.num_seen_examples += 1
+                        self.class_count_total[label] += 1
+
+                        
+                    else:
+                        pass
+            
+
+    def get_data(self, input_size):
+        """
+        Get data from the buffer.
+        """
+        # self.buffer[label]
+        # label is the key of the dictionary
+        # input is the value of the dictionary
+        # random select 128 examples from the buffer
+
+        # self.loss_index is dict and is initialized with keys of self.buffer.keys()
+        self.logits_index = {key: [] for key in self.buffer.keys()}
+        
+        samples = []
+        logits = []
+        # losses = [] # record the index of where the loss is sampled
+        labels = []
+        for i in range(input_size):
+            
+            label = random.choice(list(self.buffer.keys()))
+            # print('label:', label)
+            if self.buffer[label].size(0) >= 1:
+                indices = torch.randperm(self.buffer[label].size(0)).to(self.device)[:1]
+                samples.append(self.buffer[label][indices])
+                logits.append(self.logits[label][indices])
+                # losses.append(self.loss[label][indices])
+                self.logits_index[label].append(indices)
+                # print('self.loss_index[label]:', self.loss_index[label])
+                labels.append(torch.tensor([label]).to(self.device))
+            else:
+                pass
+        
+        return torch.cat(samples, 0).to(self.device), torch.cat(logits, 0).to(self.device), torch.cat(labels, 0).to(self.device)
+    
+    
+    def update_logits(self, logits, labels):
+        """
+        Update the logits of the examples in the buffer according to self.logits_index
+        logits: torch.Size([input_size, n_classes])
+        """
+        
+        for i in range(logits.size(0)):
+            label = labels[i].item()
+            
+            for j in range(len(self.logits_index[label])):
+                if label not in self.logits.keys():
+                    self.logits[label] = torch.unsqueeze(logits[i], 0)
+                else:
+                    self.logits[label][self.logits_index[label][j]] = logits[i].clone()
+    
+    def update_logits_all(self, logits, labels):
+        """
+        Update the logits of the examples in the buffer according to self.logits_index
+        logits: torch.Size([input_size, n_classes])
+        """
+        self.logits = {}
+        for i in range(logits.size(0)):
+            label = labels[i].item()
+            
+            for j in range(len(self.logits_index[label])):
+                if label not in self.logits.keys():
+                    self.logits[label] = torch.unsqueeze(logits[i], 0)
+                else:
+                    # self.logits[label][self.logits_index[label][j]] = logits[i]
+                    self.logits[label] = torch.cat((self.logits[label], torch.unsqueeze(logits[i], 0)), 0)
 
     
     def get_size(self):

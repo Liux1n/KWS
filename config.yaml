@@ -9,10 +9,10 @@ volume_ratio: 1 # lower means noise volume is higher
 # hyperparameters
 epochs: 200 # pretraining epochs
 epochs_CL: 16 # Continual Learning epochs
-
 n_classes: 35
 batch_size: 128
 patience: 10
+kd_alpha: 1
 # data processing
 new_data_ratio: 0.5
 snr: -8 # dB
