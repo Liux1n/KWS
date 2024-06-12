@@ -347,23 +347,23 @@ def parameter_generation(args=None, config=None, task_id=None):
             elif task_id == 'dil_test':
                 pass
 
-            elif task_id == 'dil_task_0_separate':
+            elif task_id == 'dil_task_0_joint':
 
                 training_parameters['noise_test']  = noise_task_0
                 training_parameters['noise_train'] = noise_task_0
 
-            elif task_id == 'dil_task_1_separate':
+            elif task_id == 'dil_task_1_joint':
                 
                 # test: noise_task_0+ noise_task_1
                 training_parameters['noise_test']  = noise_task_0 + noise_task_1
                 training_parameters['noise_train'] = noise_task_0 + noise_task_1
                                                 
 
-            elif task_id == 'dil_task_2_separate':
+            elif task_id == 'dil_task_2_joint':
                 training_parameters['noise_test']  = noise_task_0 + noise_task_1 + noise_task_2
                 training_parameters['noise_train'] = noise_task_0 + noise_task_1 + noise_task_2
                 
-            elif task_id == 'dil_task_3_separate':
+            elif task_id == 'dil_task_3_joint':
                 training_parameters['noise_test']  = noise_task_0 + noise_task_1 + noise_task_2 + noise_task_3
                 
                 training_parameters['noise_train'] = noise_task_0 + noise_task_1 + noise_task_2 + noise_task_3

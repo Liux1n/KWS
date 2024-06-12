@@ -43,7 +43,7 @@ import argparse
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
-torch.cuda.set_device(0)
+torch.cuda.set_device(1)
 
 # Device setup
 if torch.cuda.is_available():
@@ -90,14 +90,17 @@ parser.add_argument('--epoch', type=int, help='Number of epochs for training.')
 parser.add_argument('--patience', type=int, help='Number of epochs for training.')
 parser.add_argument('--epoch_cl', type=int, help='Number of epochs for continual training.')
 parser.add_argument('--n_clusters', type=int, help='Number of clusters in ClusterECBRS.')
+parser.add_argument('--buffer_size', type=int, help='Number of clusters in ClusterECBRS.')
 parser.add_argument('--load_buffer', action='store_true', help="Enable load_buffer.")
 parser.add_argument('--load_model', action='store_true', help="Enable load_model.")
 parser.add_argument('--from_scratch', action='store_true', help="Enable load_model.")
 parser.add_argument('--kd', action='store_true', help="Enable knowledge distillation.")
 parser.add_argument('--mixup', action='store_true', help="Enable knowledge distillation.")
 parser.add_argument('--reg', action='store_true', help="Enable regularizer.")
-parser.add_argument('--task1_sep', action='store_true', help="Enable regularizer.")
-parser.add_argument('--task2_sep', action='store_true', help="Enable regularizer.")
+parser.add_argument('--task1_joint', action='store_true', help="Enable regularizer.")
+parser.add_argument('--task2_joint', action='store_true', help="Enable regularizer.")
+parser.add_argument('--model_M', action='store_true', help="Enable regularizer.")
+parser.add_argument('--model_L', action='store_true', help="Enable regularizer.")
 parser.add_argument('--save_buffer', action='store_true', help="Enable load_model.")
 parser.add_argument('--seed', type=int, help='Number of epochs for training.')
 parser.add_argument('--snr', type=int, help='Number of epochs for training.')
@@ -108,6 +111,10 @@ time_str = time.strftime("%Y%m%d-%H%M%S")
 if args.epoch:
   config['epochs'] = args.epoch
   print('Number of epochs changed to ', args.epoch)
+
+if args.buffer_size:
+  config['memory_buffer_size'] = args.buffer_size
+  print('Buffer size changed to ', args.buffer_size)
 
 if args.seed:
   config['seed'] = args.seed
@@ -161,6 +168,8 @@ if args.debug:
 # model_name = 'cil_LAECBRS_20240504-10112315_base_seed5.pth' # seed 5
 # model_name = 'cil_LAECBRS_20240504-10071015_base_seed42.pth' # seed 42
 
+model_name = 'cil_base_pretrain_20240611-234943_final_modelM.pth'
+
 
 
 
@@ -195,29 +204,8 @@ if args.debug:
 # model_name = 'dil_base_pretrain_20240606-044521_trial19.pth'
 # model_name = 'dil_base_pretrain_20240608-230512_final.pth' # final base
 
-model_name = 'dil_joint_pretrain_20240609-012816_final.pth' # final joint
+# model_name = 'dil_joint_pretrain_20240609-012816_final.pth' # final joint
 
-
-
-
-# model_name = 'dil_joint_pretrain_20240516-041649_snr-8_seed42_new.pth'
-# model_name = 'dil_base_pretrain_20240517-214724_seed28928.pth'
-# model_name = 'dil_joint_pretrain_20240526-044750_patience20.pth' # joint patience 20
-
-
-
-# model_name = 'dil_base_pretrain_20240509-193416_newData42.pth' # seed 42 new noise data
-# model_name = 'dil_base_pretrain_20240509-233658_newData42.pth'
-
-# model_name = 'dil_LAECBRS_20240505-02300238_base_seed4.pth'
-# model_name = 'dil_LAECBRS_20240505-00214918_base_seed5.pth'
-# model_name = 'dil_LAECBRS_20240505-07400352_seed42.pth'
-
-
-# model_name = 'dil_base_pretrain_20240504-165645_SNR_-3dB_newNoise.pth'
-# model_name = 'dil_joint_pretrain_20240504-174944_SNR_-3dB_newNoise.pth'
-# 
-# model_name = 'dil_base_pretrain_20240502-214127_SNR_-10dB_newNoise.pth'
 
 
 
@@ -251,7 +239,12 @@ if args.mode == 'dil':
     remove_txt()
     print('Training model on dil_task_0...')
     n_classes = config['n_classes'] + 2
-    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    if args.model_M:
+      model = DSCNNM(use_bias = True, n_classes = n_classes)
+    elif args.model_L:
+      model = DSCNNL(use_bias = True, n_classes = n_classes)
+    else:
+      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
     model.to(device)
     summary(model,(1,49,data_processing_parameters['feature_bin_count']))
     dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -270,8 +263,13 @@ if args.mode == 'dil':
   elif args.method == 'joint_pretrain':
     # if args.background_volume:
     #   config['background_volume'] = args.background_volume
-
-    training_parameters, data_processing_parameters = parameter_generation(args, config, task_id='dil_joint')
+    if args.task1_joint:
+      task_id = 'dil_task_1_joint'
+    elif args.task2_joint:
+      task_id = 'dil_task_2_joint'
+    else:
+      task_id = 'dil_joint'
+    training_parameters, data_processing_parameters = parameter_generation(args, config, task_id=task_id)
 
     # Dataset generation
     audio_processor = dataset.AudioProcessor(training_parameters, data_processing_parameters)
@@ -285,7 +283,12 @@ if args.mode == 'dil':
     remove_txt()
     print('Joint-Training model...')
     n_classes = config['n_classes'] + 2
-    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    if args.model_M:
+      model = DSCNNM(use_bias = True, n_classes = n_classes)
+    elif args.model_L:
+      model = DSCNNL(use_bias = True, n_classes = n_classes)
+    else:
+      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
     model.to(device)
     summary(model,(1,49,data_processing_parameters['feature_bin_count']))
     dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -321,7 +324,12 @@ if args.mode == 'dil':
       
       # Loaded model has n_classes = 35 + 2 = 37
       n_classes = config['n_classes'] + 2 # 35 + 2
-      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+      if args.model_M:
+        model = DSCNNM(use_bias = True, n_classes = n_classes)
+      elif args.model_L:
+        model = DSCNNL(use_bias = True, n_classes = n_classes)
+      else:
+        model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
       model.to(device)
       
       dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -1817,7 +1825,12 @@ elif args.mode == 'cil':
     # Removing stored inputs and activations
     remove_txt()
     n_classes = 19
-    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    if args.model_M:
+      model = DSCNNM(use_bias = True, n_classes = n_classes)
+    elif args.model_L:
+      model = DSCNNL(use_bias = True, n_classes = n_classes)
+    else:
+      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
     model.to(device)
     summary(model,(1,49,data_processing_parameters['feature_bin_count']))
     dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
@@ -1851,7 +1864,12 @@ elif args.mode == 'cil':
     # Removing stored inputs and activations
     remove_txt()
     n_classes = 37
-    model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
+    if args.model_M:
+      model = DSCNNM(use_bias = True, n_classes = n_classes)
+    elif args.model_L:
+      model = DSCNNL(use_bias = True, n_classes = n_classes)
+    else:
+      model = DSCNNS(use_bias = True, n_classes = n_classes) # 35 words
     model.to(device)
     summary(model,(1,49,data_processing_parameters['feature_bin_count']))
     dummy_input = torch.rand(1, 1,49,data_processing_parameters['feature_bin_count']).to(device)
