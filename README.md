@@ -21,23 +21,6 @@ Paper: [Towards On-device Domain Adaptation for Noise-Robust Keyword Spotting](h
 
 ``` -->
 
-## Project structure 
-
-The project's structure is the following:
-
-```
-.
-└── odda-for-kws/
-    ├── dataset.py
-    ├── environment.yml
-    ├── LICENSE
-    ├── main.py
-    ├── model.py
-    ├── README.md
-    ├── train.py
-    └── utils.py
-    
-```
 
 ## Installation
 
@@ -49,10 +32,24 @@ conda env create -f environment.yml
 
 To change the preprocessing parameters (e.g., number of MFCCs) or the training parameters (e.g., noise factor, learning mode -nlkws, nakws, odda-), adapt ```utils.py``` according to your settings. 
 
-To run the main script, use the command:
+To train a model from scratch in CIL, use the command:
 ```
-python main.py
+python main.py --mode cil --noise_mode nlkws --method base_pretrain
 ```
+To train a model from scratch in DIL, use the command:
+```
+python main.py --mode dil --noise_mode nakws --method base_pretrain
+```
+To perform training for continual learning e.g. in DIL, save a pre-trained model under the folder models/, and use the following command:
+DA-ECBRS: 
+```
+python main.py --mode dil --noise_mode nakws --method DAECBRS --forgetting
+```
+LA-ECBRS:
+```
+python main.py --mode dil --noise_mode nakws --method LAECBRS --forgetting
+```
+
 
 ## Contributor
 Cristian Cioflan, ETH Zurich, [cioflanc@iis.ee.ethz.ch](cioflanc@iis.ee.ethz.ch)

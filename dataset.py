@@ -424,7 +424,7 @@ class AudioProcessor(object):
     data_placeholder = torch.zeros((samples_number, self.data_processing_parameters['spectrogram_length'], self.data_processing_parameters['feature_bin_count']), dtype=torch.float32)
     # labels_placeholder = np.zeros(samples_number)
     labels_placeholder = torch.zeros(samples_number, dtype=torch.long).to(self.device)
-    if training_parameters['method'] == 'feat_vis_noise' or training_parameters['method'] == 'noise_data':
+    if training_parameters['method'] == 'feat_vis_noise' or training_parameters['method'] == 'noise_data' or training_parameters['record_noise'] is True:
       noises_placeholder = [''] * samples_number
     else:
       # noises_placeholder = np.zeros(samples_number)
@@ -616,7 +616,7 @@ class AudioProcessor(object):
 
           # Assumption: the test noise list contains all noises 
           # TODO: Search in the complete noise list
-          if training_parameters['method'] == 'feat_vis_noise' or training_parameters['method'] == 'noise_data':
+          if training_parameters['method'] == 'feat_vis_noise' or training_parameters['method'] == 'noise_data' or training_parameters['record_noise'] is True:
             if (mode == 'training'):
               noises_placeholder[i - offset] = self.background_noise_name[background_index]
             else:
